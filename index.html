@@ -142,6 +142,19 @@ dialog::backdrop{background:#000a}
   #report h1{font-size:18px} #report h2{font-size:14px;margin:12px 0 4px}
   #report table{font-size:11px} #report img{max-width:100%;max-height:380px}
   .opt{break-inside:avoid}
+  #report.one{font-size:10.5px;line-height:1.35}
+  #report.one h2{font-size:12px;margin:8px 0 3px;border-bottom:1px solid #999}
+  #report.one ul,#report.one ol{margin:2px 0;padding-left:16px}
+  #report.one p{margin:2px 0}
+  #report.one .cols{display:grid;grid-template-columns:1.15fr 1fr;gap:14px}
+  #report.one table{width:100%;font-size:10px}#report.one td{padding:1px 4px;border-bottom:1px solid #ddd}
+  #report.one img{max-width:100%;max-height:230px;display:block}
+  #report.one .sh-head{display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:4px}
+  #report.one .sh-t{font-size:16px;font-weight:700}
+  #report.one .plan{max-height:200px;overflow:hidden}
+  #report.one .sign{display:flex;justify-content:space-between;margin-top:18px}
+  #report.one .fine{font-size:8.5px;color:#555;margin-top:6px}
+  @page{size:A4;margin:12mm}
 }
 </style>
 </head>
@@ -329,6 +342,7 @@ dialog::backdrop{background:#000a}
     <label class="note">◐ <input type="range" id="cCon" min="0.4" max="2.5" step="0.05" value="1"></label>
     <button class="btn sm" id="cInv" aria-pressed="false">Invert</button>
     <button class="btn sm" id="cTrace" aria-pressed="true">Tracing</button>
+    <button class="btn sm" id="cOutl" aria-pressed="true" title="Anatomical outlines drawn from the landmarks">Outlines</button>
     <button class="btn sm" id="cGrid" aria-pressed="false" title="10 mm grid (needs calibration)">Grid</button>
     <span class="muted">|</span>
     <button class="btn sm" id="cRul" aria-pressed="false" title="Tap two points — the distance is drawn on the X-ray">📏 Ruler</button>
@@ -342,7 +356,8 @@ dialog::backdrop{background:#000a}
   </div>
   <h2>Skeletal maturity — cervical vertebrae (CVMI)</h2>
   <div class="card">
-    <div class="note">Look at C2, C3 and C4 on the ceph (zoom in) and answer — the stage, skeletal age and remaining growth are worked out for you (Baccetti CS 1–6 and Hassel–Farman CVMI).</div>
+    <div class="note">Tap <b>📐 Measure on the X-ray</b> and touch the corners of C2, C3 and C4 (13 taps) — or answer the questions yourself. The stage, skeletal age and remaining growth are worked out for you (Baccetti CS 1–6 and Hassel–Farman CVMI).</div>
+    <div class="row" style="margin-top:8px"><button class="btn sm primary" id="vertBtn">📐 Measure on the X-ray</button><span class="note" id="vertRep"></span></div>
     <div class="grid" style="margin-top:8px">
       <label class="f">Concavity at lower border of C2<select data-k="ceph.cv.c2"><option value="">—</option><option value="y">Present</option><option value="n">Absent (flat)</option></select></label>
       <label class="f">Concavity at lower border of C3<select data-k="ceph.cv.c3"><option value="">—</option><option value="y">Present</option><option value="n">Absent (flat)</option></select></label>
@@ -400,7 +415,7 @@ dialog::backdrop{background:#000a}
   <div id="planOut"></div>
   <h2>Chosen treatment plan</h2>
   <div class="card">
-    <div class="row" style="margin-bottom:8px"><button class="btn sm primary" id="buildPlan">Write plan from the ticked options</button><span class="note">You can then edit it freely.</span></div>
+    <div class="row" style="margin-bottom:8px"><button class="btn sm primary" id="buildPlan">Write plan from the ticked options</button><button class="btn sm" id="sumBtn">🧾 One-page summary</button><span class="note">You can then edit it freely.</span></div>
     <label class="f"><textarea data-k="plan.text" style="min-height:220px" placeholder="Tick options above and press the button, or write the plan here."></textarea></label>
     <div class="grid" style="margin-top:10px">
       <label class="f">Appliance<select data-k="plan.appl"><option value="">—</option><option>Fixed – metal brackets</option><option>Fixed – ceramic brackets</option><option>Fixed – self-ligating</option><option>Lingual</option><option>Clear aligners</option><option>Functional then fixed</option><option>Removable</option></select></label>
@@ -437,6 +452,7 @@ dialog::backdrop{background:#000a}
 
 <dialog id="moreDlg"><div style="padding:16px;display:flex;flex-direction:column;gap:8px">
   <b>Case</b>
+  <button class="btn" id="sumBtn2">🧾 One-page summary sheet</button>
   <button class="btn" id="expBtn">Export this case (backup file)</button>
   <label class="btn" style="text-align:center"><input type="file" id="impFile" accept=".json,application/json" hidden>Import case file(s)</label>
   <b style="margin-top:6px">Settings</b>
@@ -498,7 +514,7 @@ function blobRefs(c){const r=[];for(const s in c.photos)if(c.photos[s])r.push([c
 function caseLabel(c){return (c.pt.name||'Unnamed case')+(c.pt.file?' · '+c.pt.file:'')}
 function renderCaseSel(){const s=$('#caseSel');s.innerHTML=cases.sort((a,b)=>(b.updated||b.created)-(a.updated||a.created)).map(c=>`<option value="${c.id}">${esc(caseLabel(c))}</option>`).join('');if(cur)s.value=cur.id}
 async function openCase(c){await saveNow();for(const u of urlCache.values())URL.revokeObjectURL(u);urlCache.clear();cur=c;
-  for(const k of['photos','fx','models','occ','w','arch'])cur[k]=cur[k]||{};cur.ceph=cur.ceph||{pts:{}};cur.ceph.pts=cur.ceph.pts||{};cur.ceph.auto=cur.ceph.auto||{};cur.ceph.cv=cur.ceph.cv||{};cur.ceph.meas=cur.ceph.meas||[];q3=null;measMode=null;measPts=[];cur.opg=cur.opg||{teeth:{},f:{}};cur.plan=cur.plan||{};cur.plan.sel=cur.plan.sel||[];cur.plan.refs=cur.plan.refs||[];cur.pt.h=cur.pt.h||{};
+  for(const k of['photos','fx','models','occ','w','arch'])cur[k]=cur[k]||{};cur.ceph=cur.ceph||{pts:{}};cur.ceph.pts=cur.ceph.pts||{};cur.ceph.auto=cur.ceph.auto||{};cur.ceph.cv=cur.ceph.cv||{};cur.ceph.vert=cur.ceph.vert||{};vertStep=-1;cur.ceph.meas=cur.ceph.meas||[];q3=null;measMode=null;measPts=[];cur.opg=cur.opg||{teeth:{},f:{}};cur.plan=cur.plan||{};cur.plan.sel=cur.plan.sel||[];cur.plan.refs=cur.plan.refs||[];cur.pt.h=cur.pt.h||{};
   try{localStorage.setItem('oa-last',c.id)}catch(e){}
   renderCaseSel();bindAll();renderPhotos();renderWidths();renderAnalysis();renderBrushes();renderChart();lmIdx=nextMissing(0);renderLm();renderCephTable();renderLive(null);renderCvm();updDots();
   cephView.setImage(null);opgView.setImage(null);mesh.clear();
@@ -785,17 +801,17 @@ $('#cAnal').onchange=e=>setAnalysis(e.target.value);$('#cAnal2').onchange=e=>set
 let lmIdx=0,calMode=false,calPts=[];
 function nextMissing(from){for(let i=0;i<LMS.length;i++){const j=(from+i)%LMS.length;if(!cur.ceph.pts[LMS[j][0]])return j}return Math.min(from,LMS.length-1)}
 function renderLm(){$('#lmList').innerHTML=LMS.map(([k,n,d],i)=>`<div class="lm ${i===lmIdx?'cur':''}" data-i="${i}"><b>${k}</b><span class="d"><span style="color:var(--ink)">${esc(n)}</span><br>${esc(d)}</span>${cur.ceph.auto&&cur.ceph.auto[k]?`<span class="au ${cur.ceph.auto[k]==='low'?'low':''}">${cur.ceph.auto[k]==='tpl'?'draft':'auto'}</span>`:''}${cur.ceph.pts[k]?`<span class="ok">${cur.ceph.auto&&cur.ceph.auto[k]?'?':'✓'}</span><button class="btn sm" data-clr="${k}" title="Remove">×</button>`:''}</div>`).join('');
-  const h=$('#cHint');if(cephView.img){h.hidden=false;$('#cOK').hidden=!Object.keys(cur.ceph.auto||{}).length;if(aiBusy)return;if(measMode){measHint();return}h.textContent=q3?`Quick place: tap ${LMS.find(l=>l[0]===Q3[q3.length])[1]} (${q3.length+1} of 3)`:calMode?`Calibrate: tap ${calPts.length?'the second':'the first'} point on the ruler`:(LMS.every(l=>cur.ceph.pts[l[0]])?'All landmarks placed — drag any point to adjust it':`Tap to place ${LMS[lmIdx][1]} — ${LMS[lmIdx][2]}`)}else h.hidden=true}
+  const h=$('#cHint');if(cephView.img){h.hidden=false;$('#cOK').hidden=!Object.keys(cur.ceph.auto||{}).length;if(aiBusy)return;if(vertStep>=0){vertHint();return}if(measMode){measHint();return}h.textContent=q3?`Quick place: tap ${LMS.find(l=>l[0]===Q3[q3.length])[1]} (${q3.length+1} of 3)`:calMode?`Calibrate: tap ${calPts.length?'the second':'the first'} point on the ruler`:(LMS.every(l=>cur.ceph.pts[l[0]])?'All landmarks placed — drag any point to adjust it':`Tap to place ${LMS[lmIdx][1]} — ${LMS[lmIdx][2]}`)}else h.hidden=true}
 $('#lmList').onclick=e=>{const c=e.target.closest('[data-clr]');if(c){delete cur.ceph.pts[c.dataset.clr];delete cur.ceph.auto[c.dataset.clr];save();renderLm();renderCephTable();cephView.draw();return}const r=e.target.closest('.lm');if(r){lmIdx=+r.dataset.i;renderLm()}};
 const LINES=[['S','N'],['N','A'],['N','B'],['Po','Or'],['Go','Me'],['ANS','PNS'],['U1A','U1T'],['L1A','L1T'],['Prn','PogS'],['N','Pog'],['S','Gn']];
 const cephView=new ImgView($('#cStage'),$('#cCv'),{empty:$('#cEmpty'),
-  hit:(q,tol)=>{let best=null,bd=tol;(cur.ceph.meas||[]).forEach((m,i)=>m.p.forEach((pt,j)=>{const d=len(sub(pt,q));if(d<bd){bd=d;best='#m'+i+'_'+j}}));for(const k in cur.ceph.pts){const d=len(sub(cur.ceph.pts[k],q));if(d<bd){bd=d;best=k}}return best},
-  onDrag:(k,q)=>{if(k.startsWith('#m')){const[i,j]=k.slice(2).split('_').map(Number);cur.ceph.meas[i].p[j]=q.map(r1);liveSoon(null);return}cur.ceph.pts[k]=q.map(r1);if(cur.ceph.auto[k]){delete cur.ceph.auto[k];renderLm()}liveSoon(k)},onDrop:()=>{save();renderCephTable();renderLive(null)},
-  onTap:q=>{if(measMode){measTap(q);return}if(q3){q3Tap(q);return}if(calMode){calPts.push(q);if(calPts.length===2){const px=len(sub(calPts[0],calPts[1]));const mm=parseFloat(prompt('Distance between the two points in mm:','10'));
+  hit:(q,tol)=>{let best=null,bd=tol;const VT=cur.ceph.vert||{};for(const V in VT)for(const k in VT[V]){const dd=len(sub(VT[V][k],q));if(dd<bd){bd=dd;best='#v'+V+'_'+k}}(cur.ceph.meas||[]).forEach((m,i)=>m.p.forEach((pt,j)=>{const d=len(sub(pt,q));if(d<bd){bd=d;best='#m'+i+'_'+j}}));for(const k in cur.ceph.pts){const d=len(sub(cur.ceph.pts[k],q));if(d<bd){bd=d;best=k}}return best},
+  onDrag:(k,q)=>{if(k.startsWith('#v')){const[V,kk]=k.slice(2).split('_');cur.ceph.vert[V][kk]=q.map(r1);return}if(k.startsWith('#m')){const[i,j]=k.slice(2).split('_').map(Number);cur.ceph.meas[i].p[j]=q.map(r1);liveSoon(null);return}cur.ceph.pts[k]=q.map(r1);if(cur.ceph.auto[k]){delete cur.ceph.auto[k];renderLm()}liveSoon(k)},onDrop:k=>{if(k&&k.startsWith('#v')&&vertStep<0)vertApply();save();renderCephTable();renderLive(null)},
+  onTap:q=>{if(vertStep>=0){vertTap(q);return}if(measMode){measTap(q);return}if(q3){q3Tap(q);return}if(calMode){calPts.push(q);if(calPts.length===2){const px=len(sub(calPts[0],calPts[1]));const mm=parseFloat(prompt('Distance between the two points in mm:','10'));
       if(mm>0&&px>0){cur.ceph.mmpp=+(mm/px).toFixed(5);$('[data-k="ceph.mmpp"]').value=cur.ceph.mmpp;save();toast('Calibrated: '+cur.ceph.mmpp+' mm per pixel')}calMode=false;calPts=[];$('#cCal').setAttribute('aria-pressed',false);renderCephTable()}
       renderLm();cephView.draw();return}
     cur.ceph.pts[LMS[lmIdx][0]]=q.map(r1);delete cur.ceph.auto[LMS[lmIdx][0]];save();lmIdx=nextMissing(lmIdx+1);renderLm();renderCephTable();cephView.draw()},
-  overlay:(c,v)=>{const P=cur.ceph.pts,d=v.dpr;if(v.grid)drawGrid(c,v);c.lineWidth=1.5*d;
+  overlay:(c,v)=>{const P=cur.ceph.pts,d=v.dpr;if(v.grid)drawGrid(c,v);if(v.outline!==false)drawOutlines(c,v);drawVert(c,v);c.lineWidth=1.5*d;
     if(cephView.trace!==false){c.strokeStyle='#38bdf8cc';for(const[a,b]of LINES)if(P[a]&&P[b]){const A=v.toScr(P[a]),B=v.toScr(P[b]);c.beginPath();c.moveTo(A[0],A[1]);c.lineTo(B[0],B[1]);c.stroke()}
       if(P.U1T&&P.L1T&&P.Mo){c.strokeStyle='#a78bfacc';const A=v.toScr(P.Mo),B=v.toScr(mid(P.U1T,P.L1T));c.beginPath();c.moveTo(A[0],A[1]);c.lineTo(B[0],B[1]);c.stroke()}}
     c.font=`${11*d}px sans-serif`;for(const k in P){const[x,y]=v.toScr(P[k]);const on=LMS[lmIdx]&&LMS[lmIdx][0]===k,au=cur.ceph.auto[k];c.fillStyle=on?'#facc15':au==='low'?'#f97316':au?'#22d3ee':'#f43f5e';c.beginPath();c.arc(x,y,(on?5:4)*d,0,7);c.fill();c.fillStyle='#fff';c.strokeStyle='#000';c.lineWidth=3*d;c.strokeText(k,x+6*d,y-6*d);c.fillText(k,x+6*d,y-6*d);c.lineWidth=1.5*d}
@@ -812,6 +828,8 @@ $('#cGrid').onclick=e=>{cephView.grid=!cephView.grid;e.target.setAttribute('aria
 try{$('#cInst').checked=localStorage.getItem('oa-instant')==='1'}catch(e){}
 $('#cInst').onchange=e=>{try{localStorage.setItem('oa-instant',e.target.checked?'1':'0')}catch(err){}if(e.target.checked)toast('⚡ Instant on: ✨ Auto-detect will run as soon as a ceph is uploaded')};
 fillAnalysisSelects();
+$('#cOutl').onclick=e=>{cephView.outline=cephView.outline===false;e.target.setAttribute('aria-pressed',cephView.outline);cephView.draw()};
+$('#vertBtn').onclick=vertStart;$('#sumBtn').onclick=printSummary;$('#sumBtn2').onclick=()=>{$('#moreDlg').close();printSummary()};
 /* ---------- ceph measuring: ruler, angle, live values, magnifier ---------- */
 let measMode=null,measPts=[],liveRaf=0,liveKey=null,liveM=[];
 const KEY_VALUES=['SNA','SNB','ANB','Wits','FMA','SNMP','U1SN','IMPA','II','ULE','LLE','NLA'];
@@ -827,7 +845,7 @@ function measTap(q){measPts.push(q.map(r1));const need=measMode==='d'?2:3;
 $('#cRul').onclick=()=>{if(!cephView.img)return toast('Upload the ceph first');setMeasMode('d')};
 $('#cAng').onclick=()=>{if(!cephView.img)return toast('Upload the ceph first');setMeasMode('a')};
 $('#cMag').onclick=e=>{cephView.mag=cephView.mag===false;e.target.setAttribute('aria-pressed',cephView.mag)};
-addEventListener('keydown',e=>{if(e.key!=='Escape'||curTab!=='ceph')return;if(measMode)setMeasMode(measMode);else if(q3||calMode){q3=null;calMode=false;calPts=[];$('#cQ3').setAttribute('aria-pressed',false);$('#cCal').setAttribute('aria-pressed',false);renderLm();cephView.draw()}});
+addEventListener('keydown',e=>{if(e.key!=='Escape'||curTab!=='ceph')return;if(vertStep>=0){vertStep=-1;vertHint();cephView.draw();return}if(measMode)setMeasMode(measMode);else if(q3||calMode){q3=null;calMode=false;calPts=[];$('#cQ3').setAttribute('aria-pressed',false);$('#cCal').setAttribute('aria-pressed',false);renderLm();cephView.draw()}});
 function label(c,x,y,text,d,bg='#0f172ae6',fg='#fff'){c.font=`600 ${12*d}px sans-serif`;const w=c.measureText(text).width+10*d,h=18*d;c.fillStyle=bg;c.beginPath();c.roundRect?c.roundRect(x-w/2,y-h/2,w,h,5*d):c.rect(x-w/2,y-h/2,w,h);c.fill();c.fillStyle=fg;c.textAlign='center';c.textBaseline='middle';c.fillText(text,x,y+0.5*d);c.textAlign='start';c.textBaseline='alphabetic'}
 function drawMeasures(c,v){const d=v.dpr,col='#4ade80';const all=[...cur.ceph.meas.map(m=>({...m,done:true})),...(measPts.length?[{t:measMode,p:measPts}]:[])];
   for(const m of all){const S=m.p.map(q=>v.toScr(q));c.strokeStyle=col;c.lineWidth=2*d;c.setLineDash(m.done?[]:[6*d,4*d]);c.beginPath();S.forEach((q,i)=>i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1]));c.stroke();c.setLineDash([]);
@@ -1053,6 +1071,92 @@ function renderAnalysis(){if(!cur)return;const s=spaceCalc();let h='<h3 style="m
 function molOpts(){const o=['','Class I','Class II ¼ unit','Class II ½ unit','Class II ¾ unit','Class II full unit','Class III ¼ unit','Class III ½ unit','Class III full unit','Not assessable'];for(const s of $$('.molsel'))s.innerHTML=o.map(x=>`<option value="${x}">${x||'—'}</option>`).join('')}
 molOpts();
 
+/* FEATURES */
+/* ---------- anatomical outlines drawn from the landmarks ---------- */
+function spline(c,v,pts,close){const S=pts.filter(Boolean).map(p=>v.toScr(p));if(S.length<2)return;if(close)S.push(S[0],S[1]);c.beginPath();c.moveTo(S[0][0],S[0][1]);
+  const n=close?S.length-2:S.length-1;for(let i=0;i<n;i++){const p0=S[i-1]||(close?S[S.length-3]:S[i]),p1=S[i],p2=S[i+1],p3=S[i+2]||p2;
+    c.bezierCurveTo(p1[0]+(p2[0]-p0[0])/6,p1[1]+(p2[1]-p0[1])/6,p2[0]-(p3[0]-p1[0])/6,p2[1]-(p3[1]-p1[1])/6,p2[0],p2[1])}c.stroke()}
+function frameOf(P){if(!P.S||!P.N)return null;const u=nrm(sub(P.N,P.S));let w=[-u[1],u[0]];if(P.Me&&dot(sub(P.Me,P.S),w)<0)w=[-w[0],-w[1]];const k=len(sub(P.N,P.S))/70;
+  return{u,w,k,at:(p,a,b)=>p&&[p[0]+(u[0]*a+w[0]*b)*k,p[1]+(u[1]*a+w[1]*b)*k]}}
+function toothPts(tip,apex,Wmm,k,ant){const ax=sub(apex,tip),L=len(ax),d=nrm(ax);let n=[-d[1],d[0]];if(dot(n,ant)<0)n=[-n[0],-n[1]];const W=Wmm*k;
+  const prof=[[0,.18],[.08,.42],[.25,.5],[.38,.44],[.6,.3],[.85,.14],[1,.03]],lab=[],lin=[];
+  for(const[t,h]of prof){const b=[tip[0]+ax[0]*t,tip[1]+ax[1]*t];lab.push([b[0]+n[0]*W*h,b[1]+n[1]*W*h]);lin.push([b[0]-n[0]*W*h*(t<.4?1.15:1),b[1]-n[1]*W*h*(t<.4?1.15:1)])}
+  return[...lab,...lin.reverse()]}
+function drawOutlines(c,v){const P=cur.ceph.pts,F=frameOf(P);if(!F)return;const d=v.dpr,{at,k,u,w}=F;c.save();c.lineWidth=1.6*d;c.strokeStyle='#93c5fdd9';c.lineJoin='round';
+  const L=(a,b,t)=>a&&b&&[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];
+  // sella turcica
+  {const r=5.5*k,aw=Math.atan2(w[1],w[0]);const[x,y]=v.toScr(P.S);c.beginPath();c.arc(x,y,r*v.s,aw-1.75,aw+1.75);c.stroke()}
+  // orbit rim and nasal bone
+  if(P.Or){const r=16*k,cn=[P.Or[0]-w[0]*r,P.Or[1]-w[1]*r];const[x,y]=v.toScr(cn);c.setLineDash([5*d,4*d]);c.beginPath();c.arc(x,y,r*v.s,0,7);c.stroke();c.setLineDash([])}
+  if(P.Prn)spline(c,v,[P.N,at(L(P.N,P.Prn,.45),-3,0)]);
+  // soft-tissue profile
+  if(P.Prn&&P.PogS){const sto=P.Ls&&P.Li?at(L(P.Ls,P.Li,.5),-3,0):null,lmf=P.Li?at(L(P.Li,P.PogS,.5),-4,0):null;
+    spline(c,v,[at(P.N,6.5,0),at(L(P.N,P.Prn,.55),3,0),P.Prn,P.Cm,P.Sn,P.Ls,sto,P.Li,lmf,P.PogS,P.Me&&at(P.Me,3,7.5)])}
+  // maxilla: labial contour and palate
+  if(P.ANS&&P.A){const pr=P.U1T&&P.U1A?at(L(P.U1T,P.U1A,.3),1.5,0):null;spline(c,v,[at(P.ANS,-2,1),P.A,pr])}
+  if(P.ANS&&P.PNS){spline(c,v,[P.PNS,at(L(P.PNS,P.ANS,.5),0,-1.5),P.ANS]);spline(c,v,[P.PNS,at(L(P.PNS,P.ANS,.45),0,7),P.U1A&&at(P.U1A,-4,2),P.U1T&&P.U1A?at(L(P.U1T,P.U1A,.35),-3,0):null])}
+  // mandible: ramus, lower border, symphysis
+  if(P.Go&&P.Me&&P.Pog){const inf=P.L1T&&P.L1A?at(L(P.L1T,P.L1A,.3),1.5,0):null;
+    spline(c,v,[P.Co&&at(P.Co,1.5,-1),P.Ar,at(L(P.Ar||P.Co,P.Go,.55),-1.5,0),P.Go,at(L(P.Go,P.Me,.5),0,3),P.Me,P.Gn,P.Pog,P.B,inf]);
+    if(P.L1A)spline(c,v,[P.Me,at(L(P.Me,P.L1A,.4),-9,-1),at(P.L1A,-5,0),P.L1T?at(L(P.L1T,P.L1A,.35),-3.5,0):null]);
+    if(P.Co){const[x,y]=v.toScr(at(P.Co,0,3));c.beginPath();c.arc(x,y,4*k*v.s,Math.atan2(-w[1],-w[0])-1.6,Math.atan2(-w[1],-w[0])+1.6);c.stroke()}}
+  // incisors
+  const ant=u;if(P.U1T&&P.U1A)spline(c,v,toothPts(P.U1T,P.U1A,7,k,ant),true);if(P.L1T&&P.L1A)spline(c,v,toothPts(P.L1T,P.L1A,6,k,ant),true);
+  // first molars on the occlusal plane
+  if(P.Mo&&P.U1T&&P.L1T){let dd=nrm(sub(mid(P.U1T,P.L1T),P.Mo));let nn=[-dd[1],dd[0]];if(dot(nn,w)<0)nn=[-nn[0],-nn[1]];
+    const box=(cx,s)=>{const q=(a,b)=>[cx[0]+(dd[0]*a+nn[0]*b)*k,cx[1]+(dd[1]*a+nn[1]*b)*k];spline(c,v,[q(-5,-3.2*s),q(0,-3.8*s),q(5,-3.2*s),q(5.2,0),q(5,3.2*s),q(0,3.6*s),q(-5,3.2*s),q(-5.2,0)],true);
+      for(const x of[-3,3])spline(c,v,[q(x,3.4*s),q(x*1.2,14*s)])};
+    box([P.Mo[0]-nn[0]*4*k,P.Mo[1]-nn[1]*4*k],-1);box([P.Mo[0]+nn[0]*4*k,P.Mo[1]+nn[1]*4*k],1)}
+  c.restore()}
+
+/* ---------- CVMI helper: measure C2–C4 on the X-ray ---------- */
+const VSTEPS=[['C2','pi','C2 lower border — back corner'],['C2','ai','C2 lower border — front corner'],['C2','dp','C2 lower border — highest point between the corners (tap on the border even if it is flat)'],
+  ...['C3','C4'].flatMap(V=>[[V,'as',V+' body — top front corner'],[V,'ps',V+' body — top back corner'],[V,'pi',V+' body — bottom back corner'],[V,'ai',V+' body — bottom front corner'],[V,'dp',V+' lower border — highest point between the bottom corners']])];
+let vertStep=-1;
+function vertStart(){if(!cephView.img)return toast('Upload the ceph first');if(measMode)setMeasMode(measMode);q3=null;calMode=false;cur.ceph.vert={};vertStep=0;showTab('ceph');
+  setTimeout(()=>$('#cStage').scrollIntoView({behavior:'smooth',block:'center'}),50);vertHint();cephView.draw()}
+function vertHint(){const h=$('#cHint');if(vertStep<0){renderLm();return}h.hidden=false;h.textContent=`Vertebrae ${vertStep+1}/${VSTEPS.length}: tap ${VSTEPS[vertStep][2]} — Esc to stop`}
+function vertTap(q){const[V,k]=VSTEPS[vertStep];(cur.ceph.vert[V]=cur.ceph.vert[V]||{})[k]=q.map(r1);vertStep++;if(vertStep>=VSTEPS.length){vertStep=-1;vertApply();toast('Vertebrae measured — stage worked out below the X-ray')}saveNow();vertHint();cephView.draw()}
+function vertMeasure(c){const Vt=c.ceph.vert||{},mm=num(c.ceph.mmpp),F=frameOf(c.ceph.pts||{}),up=F?[-F.w[0],-F.w[1]]:[0,-1],out={};
+  for(const V of['C2','C3','C4']){const p=Vt[V];if(!p||!p.pi||!p.ai||!p.dp)continue;const base=sub(p.ai,p.pi),W=len(base);let n=nrm([-base[1],base[0]]);
+    const toward=p.as&&p.ps?sub(mid(p.as,p.ps),mid(p.pi,p.ai)):up;if(dot(n,toward)<0)n=[-n[0],-n[1]];
+    const depth=Math.max(0,dot(sub(p.dp,p.pi),n)),r={V,depthPx:depth,depthMm:mm?depth*mm:null,rel:W?depth/W:0};r.conc=mm?r.depthMm>=0.8:r.rel>=0.05;
+    if(p.as&&p.ps){const Wd=(len(sub(p.as,p.ps))+W)/2,Ha=len(sub(p.as,p.ai)),Hp=len(sub(p.ps,p.pi)),H=(Ha+Hp)/2;r.hw=H/Wd;r.taper=Ha/Hp;
+      r.shape=r.taper<0.75?'tr':r.hw<0.9?'rh':r.hw<=1.1?'sq':'rv'}out[V]=r}return out}
+const SHAPE_NAME={tr:'trapezoid',rh:'rectangular horizontal',sq:'square',rv:'rectangular vertical'};
+function vertApply(){const m=vertMeasure(cur),cv={};if(m.C2)cv.c2=m.C2.conc?'y':'n';if(m.C3){cv.c3=m.C3.conc?'y':'n';if(m.C3.shape)cv.s3=m.C3.shape}if(m.C4){cv.c4=m.C4.conc?'y':'n';if(m.C4.shape)cv.s4=m.C4.shape}
+  cur.ceph.cv=cv;cur.ceph.cvm='';bindAll();renderCvm()}
+function vertReport(c){const m=vertMeasure(c),parts=[];for(const V of['C2','C3','C4']){const r=m[V];if(!r)continue;
+  parts.push(`${V}: lower border ${r.conc?'concave':'flat'} (${r.depthMm!=null?r.depthMm.toFixed(1)+' mm':Math.round(r.rel*100)+'% of width'} deep)`+(r.shape?`, body ${SHAPE_NAME[r.shape]} (height/width ${r.hw.toFixed(2)}${r.shape==='tr'?', front height '+Math.round(r.taper*100)+'% of back':''})`:''))}return parts}
+function drawVert(c,v){const Vt=cur.ceph.vert||{},d=v.dpr;c.save();c.strokeStyle='#facc15';c.fillStyle='#facc15';c.lineWidth=1.5*d;c.font=`${10*d}px sans-serif`;
+  for(const V of['C2','C3','C4']){const p=Vt[V];if(!p)continue;const ring=['as','ps','pi','dp','ai'].map(k=>p[k]).filter(Boolean);
+    if(ring.length>1){c.beginPath();ring.forEach((q,i)=>{const[x,y]=v.toScr(q);i?c.lineTo(x,y):c.moveTo(x,y)});if(p.as&&p.ai)c.closePath();c.stroke()}
+    for(const k in p){const[x,y]=v.toScr(p[k]);c.beginPath();c.arc(x,y,3.5*d,0,7);c.fill()}const lp=p.ps||p.pi;if(lp){const[x,y]=v.toScr(lp);c.fillText(V,x-22*d,y)}}
+  c.restore()}
+
+/* ---------- one-page summary sheet ---------- */
+function summarySheet(){const a=analyze(cur),pt=cur.pt,I=cephInterp(cur),mat=maturity(cur),M=analysisView(a.M).filter(m=>m.v!=null),an=ANALYSES[curAnalysis()];
+  const keys=an.keys||KEY_VALUES,vals=keys.map(k=>M.find(m=>m.key===k)).filter(Boolean).slice(0,14);
+  const st=m=>m.st==='ok'?'':m.st==='warn'?'(!)':'(!!)';
+  let img='';if(cephView.img){try{img=`<img src="${$('#cCv').toDataURL('image/jpeg',0.8)}" alt="">`}catch(e){}}
+  const sel=a.O.filter(o=>cur.plan.sel.includes(o.id));const pt0=(cur.plan.text||'').includes('\nPLAN\n')?cur.plan.text.split('\nPLAN\n').pop():cur.plan.text||'';let plan=pt0?esc(pt0.length>1500?pt0.slice(0,1500)+'…':pt0):sel.map(o=>`<b>${esc(o.title)}</b> — ${esc(o.steps.slice(0,2).join('; '))}`).join('<br>')||'Not yet chosen.';
+  const facts=[cur.plan.appl&&'Appliance: '+cur.plan.appl,cur.plan.months&&'Duration: about '+cur.plan.months+' months',cur.plan.anch&&'Anchorage: '+cur.plan.anch,cur.plan.ret&&'Retention: '+cur.plan.ret].filter(Boolean);
+  const sum=I?I[0].l:[a.summary||'Records incomplete.'];
+  return `<div class="sh-head"><div><div class="sh-t">Orthodontic case summary</div><div>${esc([pt.name,pt.file&&'File '+pt.file,a.A!=null&&a.A+' y',pt.sex&&(pt.sex==='F'?'Female':'Male')].filter(Boolean).join(' · '))}</div></div><div>${esc(new Date().toLocaleDateString())}</div></div>
+  <div class="cols"><div>
+    ${pt.cc?`<h2>Chief complaint</h2><p>${esc(pt.cc)}</p>`:''}
+    <h2>Diagnosis</h2><ul>${sum.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
+    <h2>Problem list</h2><ol>${a.P.slice(0,8).map(p=>`<li>${esc(p)}</li>`).join('')||'<li>None recorded</li>'}</ol>
+    ${mat?`<h2>Skeletal maturity</h2><p>${esc(mat.cs)} · CVMI ${esc(mat.cvmi)} · skeletal age ${esc(mat.ageTxt)} · ${esc(mat.rem)} growth left</p>`:''}
+  </div><div>
+    ${vals.length?`<h2>Key values — ${esc(an.keys?an.name:'main')}</h2><table>${vals.map(m=>`<tr><td>${esc(m.name)}</td><td class="n">${r1(m.v)}${m.unit==='°'?'°':' '+m.unit}</td><td class="n">${m.norm}±${m.sd}</td><td>${st(m)}</td></tr>`).join('')}</table>`:''}
+    ${img?`<h2>Tracing</h2>${img}`:''}
+  </div></div>
+  <h2>Treatment plan</h2><div class="plan">${plan.replace(/\n/g,'<br>')}</div>${facts.length?`<p>${esc(facts.join(' · '))}</p>`:''}
+  <div class="sign"><span>Orthodontist: ______________________</span><span>Signature: ______________</span><span>Date: __________</span></div>
+  <p class="fine">Prepared with Ortho Assess, a decision-support aid; final decisions rest with the treating orthodontist. (!) outside 1 SD, (!!) outside 2 SD.</p>`}
+function printSummary(){$('#report').className='one';$('#report').innerHTML=summarySheet();setTimeout(()=>window.print(),100)}
+
 /* ---------- skeletal maturity from the cervical vertebrae (Baccetti CS / Hassel-Farman CVMI) ---------- */
 const CVM={
   CS1:{cvmi:'1 · Initiation',rem:'80–100%',peak:'pubertal peak at least 2 years away',age:{M:'about 9–10.5 y',F:'about 8–9.5 y'},mid:{M:9.8,F:8.8},
@@ -1080,7 +1184,7 @@ function cvmStage(c){return c.ceph.cvm||(cvmCalc(c.ceph.cv)||{}).cs||null}
 function maturity(c){const cs=cvmStage(c);if(!cs)return null;const S=CVM[cs],sex=c.pt.sex==='M'?'M':c.pt.sex==='F'?'F':null,a=ageOf(c);
   let cmp='';if(sex&&a!=null){const d=a-S.mid[sex];cmp=Math.abs(d)<=1.5?'in line with chronological age':d>0?`about ${r1(d)} years behind chronological age (later maturer — more growth may remain than age suggests)`:`about ${r1(-d)} years ahead of chronological age (early maturer — the growth window is earlier than age suggests)`}
   return{cs,...S,ageTxt:sex?S.age[sex]:`${S.age.F} (girls) / ${S.age.M} (boys)`,cmp,manual:!!c.ceph.cvm}}
-function renderCvm(){if(!cur)return;const r=cvmCalc(cur.ceph.cv),m=maturity(cur);let h='';
+function renderCvm(){if(!cur)return;const vr=vertReport(cur);$('#vertRep').textContent=vr.length?'Measured: '+vr.join(' · '):'';const r=cvmCalc(cur.ceph.cv),m=maturity(cur);let h='';
   if(r&&!r.cs)h=`<div class="note">${esc(r.why)}</div>`;
   if(m)h=`<div style="margin-top:10px"><b>${m.cs} · CVMI ${esc(m.cvmi)}</b>${m.manual?' <span class="tag t-mute">chosen by hand</span>':r?` <span class="tag t-ok">worked out: ${esc(r.why)}</span>`:''}
     <ul class="prob"><li>Skeletal age: <b>${esc(m.ageTxt)}</b>${m.cmp?' — '+esc(m.cmp):''}</li><li>Pubertal growth remaining: <b>${esc(m.rem)}</b> · ${esc(m.peak)}</li><li>${esc(m.tip)}</li></ul>
@@ -1368,7 +1472,7 @@ $('#printBtn').onclick=async()=>{const a=analyze(cur),pt=cur.pt;let h=`<h1>Ortho
   if(cephView.img){try{h+=`<h2>Ceph tracing</h2><img src="${$('#cCv').toDataURL('image/jpeg',0.85)}">`}catch(e){}}
   const sel=a.O.filter(o=>cur.plan.sel.includes(o.id));h+=`<h2>Treatment plan</h2>`+(cur.plan.text?`<pre style="white-space:pre-wrap;font:inherit">${esc(cur.plan.text)}</pre>`:sel.map(o=>`<div class="opt"><b>${esc(o.title)}</b><ul>${o.steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ul></div>`).join('')||'<p>Not yet chosen.</p>');
   if(cur.plan.refs.length)h+=`<h2>References</h2><ol>${cur.plan.refs.map(r=>`<li>${esc(r.t)} — ${esc(r.m)} ${esc(r.u)}</li>`).join('')}</ol>`;
-  h+=`<p style="font-size:10px;color:#555;margin-top:16px">Prepared with Ortho Assess, a decision-support aid. Final treatment decisions rest with the treating clinician.</p>`;$('#report').innerHTML=h;setTimeout(()=>window.print(),100)};
+  h+=`<p style="font-size:10px;color:#555;margin-top:16px">Prepared with Ortho Assess, a decision-support aid. Final treatment decisions rest with the treating clinician.</p>`;$('#report').className='';$('#report').innerHTML=h;setTimeout(()=>window.print(),100)};
 
 /* ---------- start ---------- */
 addEventListener('pagehide',()=>saveNow());document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')saveNow()});
