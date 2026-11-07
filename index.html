@@ -335,7 +335,7 @@ dialog::backdrop{background:#000a}
     <button class="btn sm" id="cQ3" aria-pressed="false" title="Tap S, N and Me — the rest are placed from an average skull">Quick place (3 taps)</button>
     <button class="btn sm" id="cOK" hidden>✓ Accept all</button>
     <label class="note" title="Run ✨ Auto-detect as soon as a ceph is uploaded"><input type="checkbox" id="cInst"> ⚡ Instant</label>
-    <select class="btn sm" id="cAnal" aria-label="Analysis"></select>
+    <select class="btn sm" id="cAnal" aria-label="Analysis"></select><button class="btn sm" id="anEdit" hidden title="Edit or delete this analysis">✎</button>
     <button class="btn sm" id="cCal" aria-pressed="false">Calibrate (ruler)</button>
     <label class="note">mm / pixel <input type="number" step="0.0001" data-k="ceph.mmpp" style="width:90px" class="btn sm"></label>
     <label class="note">☀︎ <input type="range" id="cBri" min="0.4" max="2" step="0.05" value="1"></label>
@@ -461,6 +461,13 @@ dialog::backdrop{background:#000a}
   <button class="btn" onclick="this.closest('dialog').close()">Close</button>
 </div></dialog>
 
+<dialog id="anDlg"><form method="dialog" id="anForm" style="padding:16px;display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 40px)">
+  <b id="anTitle">New custom composite</b><span class="note" id="anHelp"></span>
+  <div class="row"><label class="f" style="flex:1">Name<input id="anName" autocomplete="off"></label><label class="f">&nbsp;<select id="anBase" class="btn sm"></select></label></div>
+  <div id="anRows" style="overflow:auto;flex:1;min-height:200px;border:1px solid var(--line);border-radius:10px;padding:4px 8px"></div>
+  <div class="note" id="anErr" style="color:var(--bad)"></div>
+  <div class="row"><button class="btn primary" value="save">Save</button><button class="btn danger" value="delete" id="anDel" formnovalidate hidden>Delete</button><button class="btn" value="cancel" formnovalidate>Cancel</button></div>
+</form></dialog>
 <dialog id="keyDlg"><form method="dialog" id="keyForm" style="padding:16px;display:flex;flex-direction:column;gap:10px">
   <b>Claude AI key for Auto-detect</b>
   <span class="note">Create a key at console.anthropic.com → API Keys (it starts with sk-ant-) and paste it here. It is saved only in this browser on this device and is sent only to Anthropic when you press ✨ Auto-detect. Each ceph costs a few cents of Anthropic credit.</span>
@@ -778,26 +785,80 @@ function cephMeasures(c){
   add('Dental','L1OP','L1 – occlusal plane',['L1T','L1A','Mo','U1T'],()=>90-ang(sub(p.L1T,p.L1A),OPd()),'°',14.5,3.5,'Retroclined to occlusal plane','Proclined to occlusal plane');
   add('Dental','U1APog','U1 to A-Pog (mm)',['U1T','A','Pog'],()=>perp(p.U1T,p.A,p.Pog),'mm',2.7,1.8,'Retrusive upper incisor','Protrusive upper incisor');
   add('Dental','L1APog','L1 to A-Pog (mm)',['L1T','A','Pog'],()=>perp(p.L1T,p.A,p.Pog),'mm',1,2,'Retrusive lower incisor','Protrusive lower incisor');
+  const HPf=()=>{const u=nrm(sub(p.N,p.S));let w=[-u[1],u[0]];if(p.Me&&dot(sub(p.Me,p.S),w)<0)w=[-w[0],-w[1]];const c7=Math.cos(7/DEG),s7=Math.sin(7/DEG),h=nrm([u[0]*c7+w[0]*s7,u[1]*c7+w[1]*s7]);let v=[-h[1],h[0]];if(dot(v,w)<0)v=[-v[0],-v[1]];return{h,v}};
+  const hx=k=>{const H=HPf();return dot(sub(p[k],p.N),H.h)},vy=(a,b)=>{const H=HPf();return dot(sub(p[b],p[a]),H.v)},X=(a,b)=>sex==='F'?b:a;
+  add('Burstone / COGS','cNA','N-A ∥ HP',['S','N','A'],()=>hx('A'),'mm',-2,3.7,'Retrusive maxilla','Protrusive maxilla');
+  add('Burstone / COGS','cNB','N-B ∥ HP',['S','N','B'],()=>hx('B'),'mm',X(-6.9,-6.9),X(4.3,4.3),'Retrusive mandible','Protrusive mandible');
+  add('Burstone / COGS','cNPg','N-Pg ∥ HP',['S','N','Pog'],()=>hx('Pog'),'mm',X(-6.5,-6.5),X(5.1,5.1),'Retrusive chin','Prominent chin');
+  add('Burstone / COGS','cNANS','N-ANS ⊥ HP (upper face height)',['S','N','ANS'],()=>vy('N','ANS'),'mm',X(54.7,50),X(3.2,2.4),'Short upper face','Long upper face');
+  add('Burstone / COGS','cANSGn','ANS-Gn ⊥ HP (lower face height)',['S','N','ANS','Gn'],()=>vy('ANS','Gn'),'mm',X(68.6,61.3),X(3.8,3.3),'Short lower face','Long lower face');
+  add('Burstone / COGS','cPNSN','PNS-N ⊥ HP (posterior maxillary height)',['S','N','PNS'],()=>vy('N','PNS'),'mm',X(53.9,50.6),X(1.7,2.2),'Short posterior maxilla','Long posterior maxilla');
+  add('Burstone / COGS','cMPHP','Mandibular plane – HP',['S','N','Go','Me'],()=>lineAng(sub(p.Me,p.Go),HPf().h),'°',X(23,24.2),X(5.9,5),'Flat mandibular plane','Steep mandibular plane');
+  add('Burstone / COGS','cL1GoGn','L1 – Go-Gn',['L1T','L1A','Go','Gn'],()=>ang(sub(p.L1T,p.L1A),sub(p.Go,p.Gn)),'°',X(95.9,95.9),X(5.2,5.7),'Retroclined lower incisors','Proclined lower incisors');
+  add('Burstone / COGS','cOPHP','Occlusal plane – HP',['S','N','Mo','U1T','L1T'],()=>lineAng(OPd(),HPf().h),'°',X(6.2,7.1),X(5.1,2.5),'Flat occlusal plane','Steep occlusal plane');
+  add('Burstone / COGS','cArGo','Ramus length Ar-Go',['Ar','Go'],()=>len(sub(p.Go,p.Ar)),'mm',X(52,46.8),X(4.2,2.5),'Short ramus','Long ramus');
+  add('Burstone / COGS','cGoPg','Mandibular body Go-Pg',['Go','Pog'],()=>len(sub(p.Pog,p.Go)),'mm',X(83.7,74.3),X(4.6,5.8),'Short mandibular body','Long mandibular body');
+  add('Burstone / COGS','cArGoGn','Gonial angle Ar-Go-Gn',['Ar','Go','Gn'],()=>at('Ar','Go','Gn'),'°',X(119.1,122),X(6.5,6.9),'Horizontal growth','Vertical growth');
+  add('Burstone / COGS','cBPg','Chin prominence B-Pg ∥ MP',['B','Pog','Go','Me'],()=>Math.abs(dot(sub(p.Pog,p.B),nrm(sub(p.Me,p.Go)))),'mm',X(8.9,7.2),X(1.7,1.9),'Flat chin','Prominent chin');
   for(const m of out)if(m.v!=null){const z=(m.v-m.norm)/m.sd;m.z=z;m.st=Math.abs(z)<=1?'ok':Math.abs(z)<=2?'warn':'bad';m.txt=Math.abs(z)<=1?'Within normal':z>0?m.hi:m.lo}
   return out}
-/* analysis presets: which measurements, in what order, with which norms */
+/* analysis presets: which measurements, in what order, with which norms ([norm,sd] or [male,sd,female,sd]) */
 const ANALYSES={
-  all:{name:'All measurements',keys:null},
-  steiner:{name:'Steiner',keys:['SNA','SNB','ANB','SNMP','U1NAa','U1NAm','L1NBa','L1NBm','PogNB','II','OPFH']},
-  downs:{name:'Downs',keys:['FacAng','NAPog','ABpl','FMA','Yax','OPFH','II','L1OP','IMPA','U1APog'],norms:{IMPA:[91.4,3.8],II:[135.4,5.8]}},
-  tweed:{name:'Tweed',keys:['FMA','IMPA','FMIA']},
-  mcnamara:{name:'McNamara',keys:['ANp','PNp','CoA','CoGn','MxMd','LAFHmm','L1APog']},
-  eastman:{name:'Eastman',keys:['SNA','SNB','ANB','SNPP','PPMP','U1PP','IMPA','II','LAFH'],norms:{SNA:[81,3],SNB:[78,3],ANB:[3,2],PPMP:[27,4],IMPA:[93,6],II:[135,10]},names:{PPMP:'MMPA (maxillary–mandibular planes)'}},
-  jarabak:{name:'Jarabak / Björk',keys:['Saddle','Artic','Gon','Bjork','Jar','SNMP','FMA','Yax','LAFH','LAFHmm']},
-  ricketts:{name:'Ricketts (selected)',keys:['FacAng','NAPog','L1APog','ULE','LLE']},
-  soft:{name:'Soft tissue (Holdaway, E-line)',keys:['ULE','LLE','NLA','H']}};
-function curAnalysis(){let k=null;try{k=localStorage.getItem('oa-analysis')}catch(e){}return ANALYSES[k]?k:'all'}
-function analysisView(M,key=curAnalysis()){const A=ANALYSES[key];if(!A.keys)return M;const by=Object.fromEntries(M.map(m=>[m.key,m]));
-  return A.keys.map(k=>by[k]).filter(Boolean).map(m0=>{const m={...m0};const nn=A.norms&&A.norms[m.key];if(A.names&&A.names[m.key])m.name=A.names[m.key];
-    if(nn){m.norm=nn[0];m.sd=nn[1];if(m.v!=null){const z=(m.v-m.norm)/m.sd;m.z=z;m.st=Math.abs(z)<=1?'ok':Math.abs(z)<=2?'warn':'bad';m.txt=Math.abs(z)<=1?'Within normal':z>0?m.hi:m.lo}}return m})}
-function fillAnalysisSelects(){const k=curAnalysis(),o=Object.entries(ANALYSES).map(([v,a])=>`<option value="${v}" ${v===k?'selected':''}>${esc(a.name)}</option>`).join('');for(const id of['cAnal','cAnal2'])$('#'+id).innerHTML=o}
-function setAnalysis(k){try{localStorage.setItem('oa-analysis',k)}catch(e){}fillAnalysisSelects();renderCephTable();cephView.draw()}
+  all:{name:'All measurements',keys:null,grp:'ceph'},
+  composite:{name:'Composite (Ortho Assess)',grp:'ceph',keys:['SNA','SNB','ANB','Wits','ANp','PNp','MxMd','FMA','SNMP','Jar','LAFH','U1SN','U1NAm','IMPA','L1NBm','II','ULE','LLE','NLA']},
+  wits:{name:'Wits appraisal',grp:'ceph',keys:['Wits','ANB','SNA','SNB','OPFH','ABpl'],norms:{Wits:[-1,2,0,2]}},
+  jarabak:{name:"Jarabak / Björk",grp:'ceph',keys:['Saddle','Artic','Gon','Bjork','Jar','SNMP','FMA','Yax','LAFH','LAFHmm']},
+  cogs:{name:"Burstone / COGS",grp:'ceph',keys:['NAPog','cNA','cNB','cNPg','cNANS','cANSGn','cPNSN','cMPHP','U1PP','cL1GoGn','Wits','cOPHP','cArGo','cGoPg','cArGoGn','cBPg'],
+    norms:{NAPog:[3.9,6.4,2.6,5.1],U1PP:[111,4.7,112.5,5.3],Wits:[-1.1,2,-0.4,2.5]},names:{U1PP:'U1 – nasal floor',Wits:'A-B along occlusal plane'},
+    note:'COGS norms from Burstone et al. (1978) and Legan & Burstone (1980), adult white sample, by sex — check them against your reference.'},
+  downs:{name:'Downs',grp:'ceph',keys:['FacAng','NAPog','ABpl','FMA','Yax','OPFH','II','L1OP','IMPA','U1APog'],norms:{IMPA:[91.4,3.8],II:[135.4,5.8]}},
+  eastman:{name:'Eastman',grp:'ceph',keys:['SNA','SNB','ANB','SNPP','PPMP','U1PP','IMPA','II','LAFH'],norms:{SNA:[81,3],SNB:[78,3],ANB:[3,2],PPMP:[27,4],IMPA:[93,6],II:[135,10]},names:{PPMP:'MMPA (maxillary–mandibular planes)'}},
+  mcnamara:{name:"McNamara",grp:'ceph',keys:['ANp','PNp','CoA','CoGn','MxMd','LAFHmm','L1APog']},
+  ricketts:{name:'Ricketts (selected)',grp:'ceph',keys:['FacAng','NAPog','L1APog','ULE','LLE']},
+  steiner:{name:"Steiner",grp:'ceph',keys:['SNA','SNB','ANB','SNMP','U1NAa','U1NAm','L1NBa','L1NBm','PogNB','II','OPFH']},
+  tweed:{name:"Tweed",grp:'ceph',keys:['FMA','IMPA','FMIA']},
+  soft:{name:'Soft tissue (Holdaway, E-line)',grp:'ceph',keys:['ULE','LLE','NLA','H']}};
+function myAnalyses(){try{const a=JSON.parse(localStorage.getItem('oa-my-analyses')||'[]');return Array.isArray(a)?a:[]}catch(e){return[]}}
+function saveMyAnalyses(a){try{localStorage.setItem('oa-my-analyses',JSON.stringify(a))}catch(e){toast('Could not save on this device')}}
+function getAnalysis(k){if(ANALYSES[k])return ANALYSES[k];const m=myAnalyses().find(x=>x.id===k);return m||null}
+function curAnalysis(){let k=null;try{k=localStorage.getItem('oa-analysis')}catch(e){}return getAnalysis(k)?k:'all'}
+function curAn(){return getAnalysis(curAnalysis())}
+function pickNorm(nn,sex){if(!nn)return null;if(nn.length<4)return nn;return sex==='F'?[nn[2],nn[3]]:sex==='M'?[nn[0],nn[1]]:[(nn[0]+nn[2])/2,Math.max(nn[1],nn[3])]}
+function analysisView(M,key=curAnalysis()){const A=getAnalysis(key)||ANALYSES.all;if(!A.keys)return M;const by=Object.fromEntries(M.map(m=>[m.key,m])),sex=cur&&cur.pt.sex;
+  return A.keys.map(k=>by[k]).filter(Boolean).map(m0=>{const m={...m0};const nn=pickNorm(A.norms&&A.norms[m.key],sex);if(A.names&&A.names[m.key])m.name=A.names[m.key];
+    if(nn){m.norm=r1(nn[0]*100)/100;m.sd=nn[1];if(m.v!=null){const z=(m.v-m.norm)/m.sd;m.z=z;m.st=Math.abs(z)<=1?'ok':Math.abs(z)<=2?'warn':'bad';m.txt=Math.abs(z)<=1?'Within normal':z>0?m.hi:m.lo}}return m})}
+function fillAnalysisSelects(){const k=curAnalysis(),my=myAnalyses(),opt=(v,n)=>`<option value="${esc(v)}" ${v===k?'selected':''}>${esc(n)}</option>`;
+  const o=`<optgroup label="Custom">${my.filter(a=>a.grp==='custom').map(a=>opt(a.id,a.name)).join('')}<option value="+custom">＋ New custom composite…</option></optgroup>
+    <optgroup label="Cephalometric">${Object.entries(ANALYSES).map(([v,a])=>opt(v,a.name)).join('')}</optgroup>
+    <optgroup label="Regional (customized norms)">${my.filter(a=>a.grp==='regional').map(a=>opt(a.id,a.name)).join('')}<option value="+regional">＋ New regional norms…</option></optgroup>`;
+  for(const id of['cAnal','cAnal2'])$('#'+id).innerHTML=o;$('#anEdit').hidden=!my.some(a=>a.id===k)}
+function setAnalysis(k){if(k==='+custom'||k==='+regional'){fillAnalysisSelects();return openAnBuilder(k.slice(1))}try{localStorage.setItem('oa-analysis',k)}catch(e){}fillAnalysisSelects();renderCephTable();renderLive(null);cephView.draw()}
 $('#cAnal').onchange=e=>setAnalysis(e.target.value);$('#cAnal2').onchange=e=>setAnalysis(e.target.value);
+/* builder for custom composites and regional norm sets */
+let anEditing=null;
+function openAnBuilder(grp,existing){anEditing=existing||null;const A=existing||{grp,name:'',keys:[],norms:{}},M=cephMeasures(cur),sex=cur.pt.sex;
+  $('#anTitle').textContent=existing?'Edit '+(A.grp==='regional'?'regional norms':'custom composite'):grp==='regional'?'New regional norms':'New custom composite';
+  $('#anHelp').textContent=A.grp==='regional'?'Name the population (e.g. "South Indian adults — author, year"), start from an analysis, then type the norm and SD for each measurement from your reference.':'Name your analysis and tick the measurements to include. You can change the norm and SD of any measurement.';
+  $('#anName').value=A.name;$('#anBase').innerHTML='<option value="">Start from…</option>'+Object.entries(ANALYSES).filter(([k])=>k!=='all').map(([k,a])=>`<option value="${k}">${esc(a.name)}</option>`).join('');
+  const keys=new Set(A.keys||[]);let g='',h='';
+  for(const m of M){if(m.g!==g){g=m.g;h+=`<tr><td colspan="4" style="font-weight:700;padding-top:10px">${esc(g)}</td></tr>`}const nn=pickNorm(A.norms&&A.norms[m.key],sex)||[m.norm,m.sd];
+    h+=`<tr><td><label class="c" style="margin:0"><input type="checkbox" data-ak="${m.key}" ${keys.has(m.key)?'checked':''}> ${esc(m.name)}</label></td><td class="muted" style="font-size:12px">${m.unit}</td>
+      <td><input class="btn sm" style="width:72px" type="number" step="0.1" data-an="${m.key}" value="${nn[0]}"></td><td><input class="btn sm" style="width:60px" type="number" step="0.1" min="0.1" data-asd="${m.key}" value="${nn[1]}"></td></tr>`}
+  $('#anRows').innerHTML=`<table><tr><th>Measurement</th><th></th><th>Norm</th><th>± SD</th></tr>${h}</table>`;$('#anDel').hidden=!existing;$('#anErr').textContent='';$('#anDlg').showModal()}
+$('#anBase').onchange=e=>{const B=ANALYSES[e.target.value];if(!B)return;const sex=cur.pt.sex,base=Object.fromEntries(cephMeasures(cur).map(m=>[m.key,m]));
+  for(const cb of $$('#anRows [data-ak]')){const k=cb.dataset.ak;cb.checked=B.keys.includes(k);const nn=pickNorm(B.norms&&B.norms[k],sex)||[base[k].norm,base[k].sd];$(`#anRows [data-an="${k}"]`).value=nn[0];$(`#anRows [data-asd="${k}"]`).value=nn[1]}
+  if(!$('#anName').value)$('#anName').value=(anEditing?anEditing.grp:$('#anTitle').textContent.includes('regional')?'regional':'custom')==='regional'?B.name+' — my population norms':'My '+B.name};
+$('#anEdit').onclick=()=>{const A=myAnalyses().find(a=>a.id===curAnalysis());if(A)openAnBuilder(A.grp,A)};
+$('#anForm').onsubmit=ev=>{const v=ev.submitter&&ev.submitter.value;if(v==='cancel'){$('#anDlg').close();return}ev.preventDefault();const my=myAnalyses();
+  if(v==='delete'){saveMyAnalyses(my.filter(a=>a.id!==anEditing.id));try{localStorage.setItem('oa-analysis','all')}catch(e){}$('#anDlg').close();setAnalysis('all');return toast('Analysis deleted')}
+  const name=$('#anName').value.trim(),keys=$$('#anRows [data-ak]').filter(c=>c.checked).map(c=>c.dataset.ak);
+  if(!name)return $('#anErr').textContent='Give it a name';if(!keys.length)return $('#anErr').textContent='Tick at least one measurement';
+  const base=Object.fromEntries(cephMeasures(cur).map(m=>[m.key,m])),norms={};
+  for(const k of keys){const n=parseFloat($(`#anRows [data-an="${k}"]`).value),sd=parseFloat($(`#anRows [data-asd="${k}"]`).value);if(isNaN(n)||!(sd>0))return $('#anErr').textContent='Check the norm and SD for '+base[k].name;
+    if(n!==base[k].norm||sd!==base[k].sd)norms[k]=[n,sd]}
+  const grp=anEditing?anEditing.grp:$('#anTitle').textContent.includes('regional')?'regional':'custom',A={id:anEditing?anEditing.id:'my-'+uid(),grp,name,keys,norms};
+  saveMyAnalyses(anEditing?my.map(a=>a.id===A.id?A:a):[...my,A]);$('#anDlg').close();setAnalysis(A.id);toast((grp==='regional'?'Regional norms':'Custom composite')+' saved: '+name)};
+
 let lmIdx=0,calMode=false,calPts=[];
 function nextMissing(from){for(let i=0;i<LMS.length;i++){const j=(from+i)%LMS.length;if(!cur.ceph.pts[LMS[j][0]])return j}return Math.min(from,LMS.length-1)}
 function renderLm(){$('#lmList').innerHTML=LMS.map(([k,n,d],i)=>`<div class="lm ${i===lmIdx?'cur':''}" data-i="${i}"><b>${k}</b><span class="d"><span style="color:var(--ink)">${esc(n)}</span><br>${esc(d)}</span>${cur.ceph.auto&&cur.ceph.auto[k]?`<span class="au ${cur.ceph.auto[k]==='low'?'low':''}">${cur.ceph.auto[k]==='tpl'?'draft':'auto'}</span>`:''}${cur.ceph.pts[k]?`<span class="ok">${cur.ceph.auto&&cur.ceph.auto[k]?'?':'✓'}</span><button class="btn sm" data-clr="${k}" title="Remove">×</button>`:''}</div>`).join('');
@@ -868,7 +929,7 @@ function drawLoupe(c,v){if(v.mag===false||!v.cursor||!v.img||(v.moved&&!v.drag))
   c.restore();c.strokeStyle='#fff';c.lineWidth=2*d;c.beginPath();c.arc(cx,cy,R,0,7);c.stroke()}
 function liveSoon(k){liveKey=k;liveM=cephMeasures(cur);if(liveRaf)return;liveRaf=requestAnimationFrame(()=>{liveRaf=0;renderLive(liveKey)})}
 function renderLive(k){if(!cur)return;if(!k)liveM=cephMeasures(cur);const by=Object.fromEntries(analysisView(liveM,'all').map(m=>[m.key,m]));for(const m of analysisView(liveM))by[m.key]=m;
-  const dep=k?liveM.filter(m=>m.ks.includes(k)):[],keys=[...new Set([...dep.map(m=>m.key),...(ANALYSES[curAnalysis()].keys||KEY_VALUES)])];
+  const dep=k?liveM.filter(m=>m.ks.includes(k)):[],keys=[...new Set([...dep.map(m=>m.key),...(curAn().keys||KEY_VALUES)])];
   const row=m=>`<div class="lv ${k&&m.ks.includes(k)?'hot':''}"><span class="d" style="background:${m.v==null?'var(--line)':m.st==='ok'?'var(--ok)':m.st==='warn'?'var(--warn)':'var(--bad)'}"></span><span class="n">${esc(m.name)}</span><span class="v">${m.v==null?'—':r1(m.v)+(m.unit==='°'?'°':' '+m.unit)}</span></div>`;
   let h=`<h4><span>${k?'Changing with '+esc(k):'Live values'}</span></h4>`+keys.map(x=>by[x]).filter(Boolean).map(row).join('');
   const ms=cur.ceph.meas||[];h+=`<h4 style="margin-top:8px"><span>Ruler & angles</span></h4>`+(ms.length?ms.map((m,i)=>`<div class="lv"><span class="n">${m.t==='d'?'📏 Distance':'∠ Angle'} ${i+1}</span><span class="v">${esc(measLabel(m))}</span><button data-dm="${i}" title="Delete">×</button></div>`).join(''):'<div class="note">Press 📏 Ruler or ∠ Angle and tap on the X-ray.</div>');
@@ -879,7 +940,7 @@ $('#cTrace').onclick=e=>{cephView.trace=cephView.trace===false;e.target.setAttri
 $('#cCal').onclick=e=>{if(!cephView.img)return toast('Upload the ceph first');if(measMode)setMeasMode(measMode);q3=null;$('#cQ3').setAttribute('aria-pressed',false);calMode=!calMode;calPts=[];e.target.setAttribute('aria-pressed',calMode);renderLm();cephView.draw()};
 $('#upCeph').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(f)await setXray('ceph',f,cephView)};
 function tagFor(m){return m.v==null?`<span class="tag t-mute">${esc(m.why)}</span>`:`<span class="tag t-${m.st}">${esc(m.txt)}</span>`}
-function renderCephTable(){if(!cur)return;const M=analysisView(cephMeasures(cur));const an=ANALYSES[curAnalysis()];$('#analNote').textContent=(an.keys?an.name+' analysis. ':'')+'Millimetre values need calibration. Norms are for adult Caucasian samples — adjust for ethnicity and age.';let g='',h='<table><tr><th>Measurement</th><th style="text-align:right">Value</th><th style="text-align:right">Norm</th><th>Interpretation</th></tr>';
+function renderCephTable(){if(!cur)return;const M=analysisView(cephMeasures(cur));const an=curAn();$('#analNote').textContent=(an.keys?an.name+(an.grp==='custom'?' (custom). ':an.grp==='regional'?' (regional norms). ':' analysis. '):'')+(an.note?an.note+' ':'')+'Millimetre values need calibration. Norms are for adult Caucasian samples — adjust for ethnicity and age.';let g='',h='<table><tr><th>Measurement</th><th style="text-align:right">Value</th><th style="text-align:right">Norm</th><th>Interpretation</th></tr>';
   for(const m of M){if(m.g!==g){g=m.g;h+=`<tr><td colspan="4" style="font-weight:700;padding-top:12px">${esc(g)}</td></tr>`}
     h+=`<tr><td>${esc(m.name)}</td><td class="n">${m.v==null?'—':r1(m.v)+' '+m.unit}</td><td class="n muted">${m.norm} ± ${m.sd}</td><td>${tagFor(m)}</td></tr>`}
   $('#cephTable').innerHTML=h+'</table>';if(typeof renderLive==='function'&&cur.ceph.meas)renderLive(null)}
@@ -1135,7 +1196,7 @@ function drawVert(c,v){const Vt=cur.ceph.vert||{},d=v.dpr;c.save();c.strokeStyle
   c.restore()}
 
 /* ---------- one-page summary sheet ---------- */
-function summarySheet(){const a=analyze(cur),pt=cur.pt,I=cephInterp(cur),mat=maturity(cur),M=analysisView(a.M).filter(m=>m.v!=null),an=ANALYSES[curAnalysis()];
+function summarySheet(){const a=analyze(cur),pt=cur.pt,I=cephInterp(cur),mat=maturity(cur),M=analysisView(a.M).filter(m=>m.v!=null),an=curAn();
   const keys=an.keys||KEY_VALUES,vals=keys.map(k=>M.find(m=>m.key===k)).filter(Boolean).slice(0,14);
   const st=m=>m.st==='ok'?'':m.st==='warn'?'(!)':'(!!)';
   let img='';if(cephView.img){try{img=`<img src="${$('#cCv').toDataURL('image/jpeg',0.8)}" alt="">`}catch(e){}}
@@ -1467,7 +1528,7 @@ $('#qOut').onclick=e=>{const i=e.target.dataset.save;if(i==null)return;const x=l
 /* ---------- printable report ---------- */
 $('#printBtn').onclick=async()=>{const a=analyze(cur),pt=cur.pt;let h=`<h1>Orthodontic assessment — ${esc(pt.name||'')}</h1><div>${esc([pt.file&&'File '+pt.file,a.A!=null&&a.A+' years',pt.sex&&(pt.sex==='F'?'Female':'Male'),pt.recDate&&'Records '+pt.recDate].filter(Boolean).join(' · '))}</div>`;
   if(pt.cc)h+=`<p><b>Chief complaint:</b> ${esc(pt.cc)}</p>`;h+=`<h2>Diagnosis</h2><p>${esc(a.summary)}</p><ul>${a.F.map(f=>`<li>${esc(f.a)}: ${esc(f.t)}</li>`).join('')}</ul><h2>Orthodontist's cephalometric interpretation</h2>${interpHTML(cephInterp(cur))}<h2>Problem list</h2><ol>${a.P.map(p=>`<li>${esc(p)}</li>`).join('')}</ol>`;
-  const M=analysisView(a.M).filter(m=>m.v!=null);if(M.length)h+=`<h2>Cephalometric values — ${esc(ANALYSES[curAnalysis()].name)}</h2><table><tr><th>Measure</th><th>Value</th><th>Norm</th><th></th></tr>${M.map(m=>`<tr><td>${esc(m.name)}</td><td>${r1(m.v)} ${m.unit}</td><td>${m.norm} ± ${m.sd}</td><td>${esc(m.txt)}</td></tr>`).join('')}</table>`;
+  const M=analysisView(a.M).filter(m=>m.v!=null);if(M.length)h+=`<h2>Cephalometric values — ${esc(curAn().name)}</h2><table><tr><th>Measure</th><th>Value</th><th>Norm</th><th></th></tr>${M.map(m=>`<tr><td>${esc(m.name)}</td><td>${r1(m.v)} ${m.unit}</td><td>${m.norm} ± ${m.sd}</td><td>${esc(m.txt)}</td></tr>`).join('')}</table>`;
   const RM=(cur.ceph.meas||[]).map(measLabel);if(RM.length)h+=`<h2>Measurements on the ceph</h2><ol>${RM.map(t=>`<li>${esc(t)}</li>`).join('')}</ol>`;
   if(cephView.img){try{h+=`<h2>Ceph tracing</h2><img src="${$('#cCv').toDataURL('image/jpeg',0.85)}">`}catch(e){}}
   const sel=a.O.filter(o=>cur.plan.sel.includes(o.id));h+=`<h2>Treatment plan</h2>`+(cur.plan.text?`<pre style="white-space:pre-wrap;font:inherit">${esc(cur.plan.text)}</pre>`:sel.map(o=>`<div class="opt"><b>${esc(o.title)}</b><ul>${o.steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ul></div>`).join('')||'<p>Not yet chosen.</p>');
