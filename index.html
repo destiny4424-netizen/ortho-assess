@@ -340,17 +340,26 @@ dialog::backdrop{background:#000a}
     <div class="stage" id="cStage"><canvas id="cCv"></canvas><div class="empty" id="cEmpty">Upload or drop a lateral ceph — DICOM (.dcm), JPEG, PNG, TIFF, HEIC or PDF.<br>Then press ✨ Auto-detect, or tap each landmark in turn. Drag any point to adjust it.</div><div class="hint" id="cHint" hidden></div></div>
     <div class="side"><div class="live" id="liveVals"></div><div class="lmlist" id="lmList"></div></div>
   </div>
-  <h2>Cervical vertebral maturation</h2>
-  <div class="card grid">
-    <label class="f span2">CVM stage (Baccetti)<select data-k="ceph.cvm">
-      <option value="">Not assessed</option>
-      <option value="CS1">CS1 – C2–C4 lower borders flat; peak ≥ 2 years away</option>
-      <option value="CS2">CS2 – concavity at C2 only; peak in about 1 year</option>
-      <option value="CS3">CS3 – concavities at C2 and C3; peak within the year</option>
-      <option value="CS4">CS4 – concavities C2–C4, bodies rectangular horizontal; peak just passed</option>
-      <option value="CS5">CS5 – C3 or C4 square; peak ended ≥ 1 year ago</option>
-      <option value="CS6">CS6 – C3 or C4 rectangular vertical; growth essentially complete</option>
-    </select></label>
+  <h2>Skeletal maturity — cervical vertebrae (CVMI)</h2>
+  <div class="card">
+    <div class="note">Look at C2, C3 and C4 on the ceph (zoom in) and answer — the stage, skeletal age and remaining growth are worked out for you (Baccetti CS 1–6 and Hassel–Farman CVMI).</div>
+    <div class="grid" style="margin-top:8px">
+      <label class="f">Concavity at lower border of C2<select data-k="ceph.cv.c2"><option value="">—</option><option value="y">Present</option><option value="n">Absent (flat)</option></select></label>
+      <label class="f">Concavity at lower border of C3<select data-k="ceph.cv.c3"><option value="">—</option><option value="y">Present</option><option value="n">Absent (flat)</option></select></label>
+      <label class="f">Concavity at lower border of C4<select data-k="ceph.cv.c4"><option value="">—</option><option value="y">Present</option><option value="n">Absent (flat)</option></select></label>
+      <label class="f">Shape of C3 body<select data-k="ceph.cv.s3"><option value="">—</option><option value="tr">Trapezoid (tapers forward)</option><option value="rh">Rectangular horizontal (wider than tall)</option><option value="sq">Square</option><option value="rv">Rectangular vertical (taller than wide)</option></select></label>
+      <label class="f">Shape of C4 body<select data-k="ceph.cv.s4"><option value="">—</option><option value="tr">Trapezoid (tapers forward)</option><option value="rh">Rectangular horizontal (wider than tall)</option><option value="sq">Square</option><option value="rv">Rectangular vertical (taller than wide)</option></select></label>
+      <label class="f">Or choose the stage by hand<select data-k="ceph.cvm">
+        <option value="">Work it out from the answers</option>
+        <option value="CS1">CS1 – C2–C4 lower borders flat</option>
+        <option value="CS2">CS2 – concavity at C2 only</option>
+        <option value="CS3">CS3 – concavities at C2 and C3</option>
+        <option value="CS4">CS4 – concavities C2–C4, bodies rectangular horizontal</option>
+        <option value="CS5">CS5 – C3 or C4 square</option>
+        <option value="CS6">CS6 – C3 or C4 rectangular vertical</option>
+      </select></label>
+    </div>
+    <div id="cvmOut"></div>
   </div>
   <h2 class="row" style="justify-content:space-between">Cephalometric analysis <select class="btn sm" id="cAnal2" aria-label="Analysis"></select></h2>
   <p class="note" id="analNote">Millimetre values need calibration. Norms are for adult Caucasian samples — adjust for ethnicity and age.</p>
@@ -429,7 +438,6 @@ dialog::backdrop{background:#000a}
 <dialog id="moreDlg"><div style="padding:16px;display:flex;flex-direction:column;gap:8px">
   <b>Case</b>
   <button class="btn" id="expBtn">Export this case (backup file)</button>
-  <button class="btn" id="expAll">Export all cases (backup file)</button>
   <label class="btn" style="text-align:center"><input type="file" id="impFile" accept=".json,application/json" hidden>Import case file(s)</label>
   <b style="margin-top:6px">Settings</b>
   <button class="btn" id="keyBtn">Claude AI key…</button>
@@ -490,9 +498,9 @@ function blobRefs(c){const r=[];for(const s in c.photos)if(c.photos[s])r.push([c
 function caseLabel(c){return (c.pt.name||'Unnamed case')+(c.pt.file?' · '+c.pt.file:'')}
 function renderCaseSel(){const s=$('#caseSel');s.innerHTML=cases.sort((a,b)=>(b.updated||b.created)-(a.updated||a.created)).map(c=>`<option value="${c.id}">${esc(caseLabel(c))}</option>`).join('');if(cur)s.value=cur.id}
 async function openCase(c){await saveNow();for(const u of urlCache.values())URL.revokeObjectURL(u);urlCache.clear();cur=c;
-  for(const k of['photos','fx','models','occ','w','arch'])cur[k]=cur[k]||{};cur.ceph=cur.ceph||{pts:{}};cur.ceph.pts=cur.ceph.pts||{};cur.ceph.auto=cur.ceph.auto||{};cur.ceph.meas=cur.ceph.meas||[];q3=null;measMode=null;measPts=[];cur.opg=cur.opg||{teeth:{},f:{}};cur.plan=cur.plan||{};cur.plan.sel=cur.plan.sel||[];cur.plan.refs=cur.plan.refs||[];cur.pt.h=cur.pt.h||{};
+  for(const k of['photos','fx','models','occ','w','arch'])cur[k]=cur[k]||{};cur.ceph=cur.ceph||{pts:{}};cur.ceph.pts=cur.ceph.pts||{};cur.ceph.auto=cur.ceph.auto||{};cur.ceph.cv=cur.ceph.cv||{};cur.ceph.meas=cur.ceph.meas||[];q3=null;measMode=null;measPts=[];cur.opg=cur.opg||{teeth:{},f:{}};cur.plan=cur.plan||{};cur.plan.sel=cur.plan.sel||[];cur.plan.refs=cur.plan.refs||[];cur.pt.h=cur.pt.h||{};
   try{localStorage.setItem('oa-last',c.id)}catch(e){}
-  renderCaseSel();bindAll();renderPhotos();renderWidths();renderAnalysis();renderBrushes();renderChart();lmIdx=nextMissing(0);renderLm();renderCephTable();renderLive(null);updDots();
+  renderCaseSel();bindAll();renderPhotos();renderWidths();renderAnalysis();renderBrushes();renderChart();lmIdx=nextMissing(0);renderLm();renderCephTable();renderLive(null);renderCvm();updDots();
   cephView.setImage(null);opgView.setImage(null);mesh.clear();
   if(cur.ceph.img){blobURL(cur.ceph.img).then(u=>u&&loadImg(u)).then(i=>{if(i&&c===cur)cephView.setImage(i)}).catch(()=>{})}
   if(cur.opg.img){blobURL(cur.opg.img).then(u=>u&&loadImg(u)).then(i=>{if(i&&c===cur)opgView.setImage(i)}).catch(()=>{})}
@@ -511,7 +519,6 @@ function blobToDataURL(b){return new Promise(r=>{const f=new FileReader();f.onlo
 async function exportCases(list,fname){await saveNow();const blobs={},out=[];for(const c of list){out.push(c);for(const[o,p]of blobRefs(c)){const b=await DB.getBlob(o[p]);if(b)blobs[o[p]]=await blobToDataURL(b)}}
   const f=new Blob([JSON.stringify({app:'ortho-assess',v:2,cases:out,blobs})],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=fname;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}
 $('#expBtn').onclick=async()=>{await exportCases([cur],(cur.pt.name||'case').replace(/[^\w-]+/g,'_')+'-ortho.json');$('#moreDlg').close()};
-$('#expAll').onclick=async()=>{await exportCases(cases,'ortho-assess-all-cases-'+new Date().toISOString().slice(0,10)+'.json');$('#moreDlg').close();toast('Saved '+cases.length+' case'+(cases.length>1?'s':''))};
 $('#impFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;try{const d=JSON.parse(await f.text());if(d.app!=='ortho-assess')throw new Error('Not an Ortho Assess file');
   const list=d.cases||[d.case];let last=null;for(const c of list){c.id=uid();for(const[o,p]of blobRefs(c)){const old=o[p],nk='b:'+uid();if(d.blobs[old]){const b=await(await fetch(d.blobs[old])).blob();await DB.putBlob(nk,b);o[p]=nk}else delete o[p]}
     cases.push(c);await DB.put(c);last=c}
@@ -524,7 +531,7 @@ function onField(e){const el=e.target;if(!el.dataset||!el.dataset.k||!cur)return
   setP(cur,el.dataset.k,v);save();const k=el.dataset.k;
   if(k.startsWith('pt.name')||k.startsWith('pt.file')){const o=$('#caseSel').selectedOptions[0];if(o)o.textContent=caseLabel(cur)}
   if(/^(w\.|arch\.|occ\.)/.test(k))renderAnalysis();
-  if(k.startsWith('ceph.'))renderCephTable(),cephView.draw();
+  if(k.startsWith('ceph.'))renderCephTable(),cephView.draw(),renderCvm();
   if(k==='opg.prim')renderChart();
   updDots()}
 
@@ -1046,9 +1053,96 @@ function renderAnalysis(){if(!cur)return;const s=spaceCalc();let h='<h3 style="m
 function molOpts(){const o=['','Class I','Class II ¼ unit','Class II ½ unit','Class II ¾ unit','Class II full unit','Class III ¼ unit','Class III ½ unit','Class III full unit','Not assessable'];for(const s of $$('.molsel'))s.innerHTML=o.map(x=>`<option value="${x}">${x||'—'}</option>`).join('')}
 molOpts();
 
+/* ---------- skeletal maturity from the cervical vertebrae (Baccetti CS / Hassel-Farman CVMI) ---------- */
+const CVM={
+  CS1:{cvmi:'1 · Initiation',rem:'80–100%',peak:'pubertal peak at least 2 years away',age:{M:'about 9–10.5 y',F:'about 8–9.5 y'},mid:{M:9.8,F:8.8},
+       tip:'Growth spurt still ahead. Best window for maxillary protraction (facemask + RME) and early transverse correction. For Class II, a functional appliance now gives mostly dental change — defer to CS3 unless the overjet is a trauma or teasing risk.'},
+  CS2:{cvmi:'2 · Acceleration',rem:'65–85%',peak:'pubertal peak in about 1 year',age:{M:'about 10.5–11.5 y',F:'about 9.5–10.5 y'},mid:{M:11,F:10},
+       tip:'Start growth modification now so it spans the peak: functional appliance for Class II, facemask still effective for Class III.'},
+  CS3:{cvmi:'3 · Transition',rem:'25–65%',peak:'pubertal peak within the year',age:{M:'about 11.5–13 y',F:'about 10.5–12 y'},mid:{M:12.3,F:11.2},
+       tip:'At the peak: the best time for functional / Herbst treatment of a mandibular-deficient Class II. Tooth-borne facemask becomes less effective — consider bone-anchored protraction (BAMP).'},
+  CS4:{cvmi:'4 · Deceleration',rem:'10–25%',peak:'peak passed 1–2 years ago',age:{M:'about 13–14 y',F:'about 12–13 y'},mid:{M:13.5,F:12.4},
+       tip:'Peak just passed: limited mandibular growth left. Fixed functional (Herbst/Forsus) is more reliable than removable; plan camouflage for larger discrepancies.'},
+  CS5:{cvmi:'5 · Maturation',rem:'5–10%',peak:'peak ended at least 1 year ago',age:{M:'about 14–16 y',F:'about 13–14.5 y'},mid:{M:15,F:13.7},
+       tip:'Growth essentially over: growth modification is unlikely to change the skeleton. Choose between camouflage and surgery; MARPE rather than tooth-borne RME for transverse problems.'},
+  CS6:{cvmi:'6 · Completion',rem:'about 0%',peak:'growth complete',age:{M:'16 y or older',F:'14.5 y or older'},mid:{M:17,F:15.5},
+       tip:'Skeletal growth complete: orthognathic surgery can be planned if needed; adult mechanics (TADs, MARPE/SARPE).'}};
+function cvmCalc(cv){cv=cv||{};const{c2,c3,c4,s3,s4}=cv;if(!c2)return null;
+  if(c2==='n')return{cs:'CS1',why:'No concavity at the lower border of C2'+(c3==='y'||c4==='y'?' (C3/C4 concavity without C2 is unusual — re-check)':'')};
+  if(c3!=='y'&&c3!=='n')return null;if(c3==='n')return{cs:'CS2',why:'Concavity at C2 only'};
+  if(c4!=='y'&&c4!=='n')return null;if(c4==='n')return{cs:'CS3',why:'Concavities at C2 and C3, not yet at C4'};
+  if(!s3||!s4)return{cs:null,why:'Concavities at C2, C3 and C4 — now choose the C3 and C4 body shapes'};
+  const sh=[s3,s4];if(sh.includes('rv'))return{cs:'CS6',why:'Concavities C2–C4 and a vertical-rectangular body'};
+  if(sh.includes('sq'))return{cs:'CS5',why:'Concavities C2–C4 and a square body'};
+  if(sh.every(x=>x==='rh'))return{cs:'CS4',why:'Concavities C2–C4, both bodies rectangular horizontal'};
+  return{cs:'CS4',why:'Concavities C2–C4 but a body is still trapezoid — between CS3 and CS4 (taken as CS4)'}}
+function cvmStage(c){return c.ceph.cvm||(cvmCalc(c.ceph.cv)||{}).cs||null}
+function maturity(c){const cs=cvmStage(c);if(!cs)return null;const S=CVM[cs],sex=c.pt.sex==='M'?'M':c.pt.sex==='F'?'F':null,a=ageOf(c);
+  let cmp='';if(sex&&a!=null){const d=a-S.mid[sex];cmp=Math.abs(d)<=1.5?'in line with chronological age':d>0?`about ${r1(d)} years behind chronological age (later maturer — more growth may remain than age suggests)`:`about ${r1(-d)} years ahead of chronological age (early maturer — the growth window is earlier than age suggests)`}
+  return{cs,...S,ageTxt:sex?S.age[sex]:`${S.age.F} (girls) / ${S.age.M} (boys)`,cmp,manual:!!c.ceph.cvm}}
+function renderCvm(){if(!cur)return;const r=cvmCalc(cur.ceph.cv),m=maturity(cur);let h='';
+  if(r&&!r.cs)h=`<div class="note">${esc(r.why)}</div>`;
+  if(m)h=`<div style="margin-top:10px"><b>${m.cs} · CVMI ${esc(m.cvmi)}</b>${m.manual?' <span class="tag t-mute">chosen by hand</span>':r?` <span class="tag t-ok">worked out: ${esc(r.why)}</span>`:''}
+    <ul class="prob"><li>Skeletal age: <b>${esc(m.ageTxt)}</b>${m.cmp?' — '+esc(m.cmp):''}</li><li>Pubertal growth remaining: <b>${esc(m.rem)}</b> · ${esc(m.peak)}</li><li>${esc(m.tip)}</li></ul>
+    <div class="note">Ages are population averages and vary between groups; use them as a guide alongside the dental age and history.</div></div>`;
+  else if(!h)h='<div class="note" style="margin-top:8px">Answer the questions above to get the stage, skeletal age and remaining growth.</div>';$('#cvmOut').innerHTML=h}
+
+/* ---------- orthodontist's cephalometric interpretation ---------- */
+const COGN_FOR_COA=[[80,98.5],[85,106.5],[90,114.5],[95,123.5],[100,131.5],[105,139.5]];// McNamara: effective mandibular length expected for a midface length
+function expectCoGn(coa){const T=COGN_FOR_COA;if(coa<=T[0][0])return T[0][1]-(T[0][0]-coa)*1.6;for(let i=1;i<T.length;i++)if(coa<=T[i][0]){const[a0,b0]=T[i-1],[a1,b1]=T[i];return b0+(coa-a0)*(b1-b0)/(a1-a0)}return T[T.length-1][1]+(coa-105)*1.6}
+function cephInterp(c){const M=cephMeasures(c),v=k=>{const m=M.find(x=>x.key===k);return m&&m.v!=null?m.v:null},o=c.occ||{},sp=spaceCalc(c),out=[],f=x=>r1(x);
+  const has=Object.keys(c.ceph.pts||{}).length>=8;if(!has)return null;
+  // 1. sagittal
+  const S=[],anb=v('ANB'),sna=v('SNA'),snb=v('SNB'),wits=v('Wits'),snmp=v('SNMP');let cls=null;
+  if(anb!=null){cls=anb>4?'II':anb<0?'III':'I';S.push(`ANB ${f(anb)}° → skeletal Class ${cls}${cls==='I'?'':anb>8||anb<-4?' (severe)':anb>6||anb<-2?' (moderate)':' (mild)'}.`)}
+  if(anb!=null&&sna!=null&&snmp!=null){const ind=-35.16+0.4*sna+0.2*snmp,d=anb-ind;S.push(`Individualised ANB for this face (Panagiotidis–Witt, from SNA and SN-MP) is ${f(ind)}°; measured ANB is ${f(d>0?d:-d)}° ${d>=0?'above':'below'} it — ${Math.abs(d)<=1?'so the jaws are in harmony for this face type':Math.abs(d)<=2.5?(d>0?'a borderline Class II tendency for this face type':'a borderline Class III tendency for this face type'):d>0?'a genuine Class II discrepancy':'a genuine Class III discrepancy'}.`)}
+  if(sna!=null&&snb!=null&&((sna>85&&snb>83)||(sna<79&&snb<77)))S.push(`SNA and SNB are both ${sna>85?'high':'low'} — nasion / anterior cranial base position is probably affecting them; judge jaw position from A and Pog to N-perpendicular instead.`);
+  if(wits!=null&&anb!=null){const wc=wits>2?'II':wits<-3?'III':'I';S.push(`Wits ${f(wits)} mm (${wc===cls?'agrees with ANB':'disagrees with ANB — ANB is distorted by nasion position and jaw rotation, Wits by the occlusal-plane tilt; give more weight to the one that matches A/Pog to N-perp and the profile'}).`)}
+  const coa=v('CoA'),cogn=v('CoGn');if(coa!=null&&cogn!=null){const e=expectCoGn(coa),d=cogn-e;S.push(`Mandibular length Co-Gn ${f(cogn)} mm vs about ${f(e)} mm expected for a ${f(coa)} mm midface (McNamara) → mandible ${Math.abs(d)<=3?'in proportion with the maxilla':d<0?f(-d)+' mm short for this maxilla (mandibular deficiency)':f(d)+' mm long for this maxilla (mandibular excess)'}.`)}
+  const anp=v('ANp'),pnp=v('PNp');if(anp!=null||pnp!=null)S.push(`A to N-perp ${anp!=null?f(anp)+' mm':'—'} (maxilla ${anp==null?'?':anp<-1?'retrusive':anp>3?'protrusive':'well placed'}), Pog to N-perp ${pnp!=null?f(pnp)+' mm':'—'} (chin ${pnp==null?'?':pnp<-5?'retrusive':pnp>1?'prominent':'well placed'}).`);
+  if(S.length)out.push({t:'Sagittal skeletal relationship',l:S});
+  // 2. vertical
+  const V=[],fma=v('FMA'),jar=v('Jar'),bj=v('Bjork'),ya=v('Yax'),lafh=v('LAFH'),gon=v('Gon');let pat=null;
+  if(fma!=null||snmp!=null){const hi=(fma!=null&&fma>30)||(snmp!=null&&snmp>37),lo=(fma!=null&&fma<20)||(snmp!=null&&snmp<27);pat=hi?'hyper':lo?'hypo':'normo';
+    V.push(`FMA ${fma!=null?f(fma)+'°':'—'}, SN-GoGn ${snmp!=null?f(snmp)+'°':'—'} → ${pat==='hyper'?'hyperdivergent (high angle)':pat==='hypo'?'hypodivergent (low angle)':'normodivergent'}.`)}
+  if(jar!=null)V.push(`Jarabak ratio ${f(jar)}% (posterior/anterior face height) → ${jar<59?'clockwise (vertical) growth rotation expected':jar>65?'counter-clockwise (horizontal) growth rotation expected':'neutral growth direction'}.`);
+  if(bj!=null)V.push(`Björk sum ${f(bj)}° → ${bj>402?'vertical grower':bj<390?'horizontal grower':'balanced'}${gon!=null?`; gonial angle ${f(gon)}°`:''}.`);
+  if(lafh!=null)V.push(`Lower face is ${f(lafh)}% of total face height (ideal ≈ 55%)${lafh>58?' — long lower face; lip incompetence and gummy smile often go with it':lafh<52?' — short lower face; deep-bite tendency':''}.`);
+  if(pat==='hyper'||(jar!=null&&jar<59))V.push('Clinical: with growth the chin moves down and back — a Class II will tend to worsen. Prefer vertical control (high-pull headgear, TAD intrusion), avoid molar extrusion and Class II elastics; extraction can help bite closure.');
+  else if(pat==='hypo'||(jar!=null&&jar>65))V.push('Clinical: forward chin rotation helps Class II correction but deepens the bite. Favour non-extraction where possible (extraction spaces close slowly, profile can flatten); level the curve of Spee and open the bite.');
+  if(V.length)out.push({t:'Vertical pattern and growth direction',l:V});
+  // 3. dentoalveolar
+  const D=[],u1=v('U1SN'),imp=v('IMPA'),ii=v('II'),u1na=v('U1NAm'),l1nb=v('L1NBm'),pognb=v('PogNB');
+  if(u1!=null)D.push(`Upper incisors ${u1>109?'proclined':u1<97?'retroclined':'well inclined'} to the cranial base (U1-SN ${f(u1)}°${u1na!=null?`, ${f(u1na)} mm ahead of NA`:''}).`);
+  if(imp!=null)D.push(`Lower incisors ${imp>95?'proclined':imp<85?'retroclined':'well inclined'} to the mandible (IMPA ${f(imp)}°${l1nb!=null?`, ${f(l1nb)} mm ahead of NB`:''}).`);
+  if(ii!=null)D.push(`Inter-incisal angle ${f(ii)}° — ${ii<125?'bimaxillary proclination; retracting incisors improves lip protrusion':ii>140?'upright incisors; deep-bite tendency and poor incisal stops':'normal'}.`);
+  if(cls==='II'&&imp!=null&&imp>95)D.push('Dentoalveolar compensation: the lower incisors are already proclined over the Class II base — little room to procline further for camouflage; correct the base (growth/surgery) or extract upper premolars.');
+  if(cls==='III'&&((imp!=null&&imp<85)||(u1!=null&&u1>108)))D.push('Compensated Class III: upper incisors proclined and/or lowers retroclined — the bite looks milder than the skeleton. Surgery would need decompensation first; camouflage room is limited.');
+  if(l1nb!=null&&pognb!=null){const d=l1nb-pognb;D.push(`Holdaway ratio L1-NB : Pog-NB = ${f(l1nb)} : ${f(pognb)} mm${Math.abs(d)<=2?' (balanced)':d>0?' — incisors are ahead of a weak chin; retract incisors or consider genioplasty':' — prominent chin; incisors can be kept forward'}.`)}
+  if(fma!=null&&imp!=null){const tgtFMIA=fma<=15?null:fma<=28?68:65,tgtIMPA=fma<=15?92:180-fma-tgtFMIA,deg=imp-tgtIMPA,mm=Math.max(0,deg*0.8),crowd=sp.L?Math.max(0,-sp.L.disc):(num(o.crowdL)||0),spee=num(o.spee)||0,tot=mm+crowd+spee;
+    D.push(`Tweed: for FMA ${f(fma)}° the lower incisor goal is IMPA ≈ ${f(tgtIMPA)}°${deg>0?`; uprighting ${f(deg)}° needs about ${f(mm)} mm of arch length`:' — no uprighting needed'}.`);
+    D.push(`Total lower space need (Tweed–Merrifield, simplified) ≈ ${f(tot)} mm = cephalometric correction ${f(mm)} + crowding ${f(crowd)} + curve of Spee ${f(spee)} → ${tot<4?'non-extraction is usually possible':tot<=8?'borderline — decide on profile, vertical pattern and patient wishes':'extraction usually needed'}.`)}
+  if(D.length)out.push({t:'Incisor position and dentoalveolar compensation',l:D});
+  // 4. soft tissue
+  const T=[],ule=v('ULE'),lle=v('LLE'),nla=v('NLA'),H=v('H');
+  if(lle!=null||ule!=null)T.push(`Lips to E-line: upper ${ule!=null?f(ule):'—'}, lower ${lle!=null?f(lle):'—'} mm (ideal about −4 / −2) → ${(lle!=null&&lle>0)||(ule!=null&&ule>-2)?'protrusive lips':(lle!=null&&lle<-4)?'retrusive lips':'balanced lips'}.`);
+  if(nla!=null)T.push(`Nasolabial angle ${f(nla)}° — ${nla>110?'obtuse: retracting upper incisors will make the upper lip look flatter and the nose bigger; be careful with upper extractions':nla<90?'acute: upper incisor retraction will improve it':'normal'}.`);
+  if(H!=null)T.push(`Holdaway H angle ${f(H)}° (7–15° ideal) — ${H>15?'convex soft tissue':H<7?'flat / concave soft tissue':'balanced'}.`);
+  if(T.length)out.push({t:'Soft tissue and the effect of treatment',l:T});
+  // 5. summary
+  const mat=maturity(c),Z=[];
+  if(cls){const lenD=coa!=null&&cogn!=null?cogn-expectCoGn(coa):null,c2=[],c3=[];// only causes that fit the class are named
+    if(anp!=null&&anp>3)c2.push('maxillary protrusion');if(lenD!=null&&lenD<-3)c2.push('a short mandible');if(pnp!=null&&pnp<-5)c2.push('a retrusive chin');if(pat==='hyper'&&!c2.length&&pnp!=null&&pnp<-2)c2.push('backward mandibular rotation');
+    if(anp!=null&&anp<-1)c3.push('maxillary retrusion');if(lenD!=null&&lenD>3)c3.push('a long mandible');if(pnp!=null&&pnp>1)c3.push('a prominent chin');
+    const where=cls==='II'?c2:cls==='III'?c3:[];
+    Z.push(`Skeletal Class ${cls}${cls==='I'?'':where.length?' mainly from '+where.join(' and '):' with no single jaw clearly at fault — check A and Pog to N-perp and the profile'}${pat?', on a '+(pat==='hyper'?'high-angle':pat==='hypo'?'low-angle':'normal-angle')+' pattern':''}.`)}
+  if(mat)Z.push(`Maturity ${mat.cs} (CVMI ${mat.cvmi}), ${mat.rem} of pubertal growth left — ${mat.tip}`);
+  else Z.push('Skeletal maturity not assessed — answer the CVMI questions on the ceph tab; it decides between growth modification and camouflage/surgery.');
+  out.unshift({t:"Orthodontist's summary",l:Z});return out}
+function interpHTML(I){return I?I.map(s=>`<h3 style="margin:12px 0 4px">${esc(s.t)}</h3><ul class="prob">${s.l.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`).join(''):'<span class="note">Place at least 8 ceph landmarks (or use ✨ Auto-detect / Quick place) to get the cephalometric interpretation.</span>'}
 /* ---------- diagnosis + treatment-planning engine ---------- */
 function ageOf(c){if(c.pt.dob){const ref=c.pt.recDate?new Date(c.pt.recDate):new Date();return Math.round((ref-new Date(c.pt.dob))/31557600000*10)/10}return num(c.pt.age)}
-function growthOf(c){const cv=c.ceph.cvm,a=ageOf(c),f=c.pt.sex==='F';if(cv){const n=+cv[2];return{st:n<=2?'pre':n<=4?'peak':'post',txt:cv+(n<=2?' – before the pubertal growth spurt':n<=4?' – at the pubertal growth spurt':' – growth spurt over'),est:false}}
+function growthOf(c){const cv=cvmStage(c),a=ageOf(c),f=c.pt.sex==='F';if(cv){const n=+cv[2],m=maturity(c);return{st:n<=2?'pre':n<=4?'peak':'post',txt:`${cv} / CVMI ${m.cvmi} – ${m.peak}; ${m.rem} of pubertal growth left; skeletal age ${m.ageTxt}${m.cmp?' ('+m.cmp+')':''}`,est:false}}
   if(a==null)return{st:null,txt:'Unknown (enter age or CVM stage)',est:true};const lim=f?[10,13.5,15]:[11.5,15,17];
   const st=a<lim[0]?'pre':a<lim[1]?'peak':a<lim[2]?'late':'post';return{st,txt:`Estimated from age ${a} (${st==='pre'?'probably before the growth spurt':st==='peak'?'probably near the growth spurt':st==='late'?'growth slowing':'growth probably complete'}) — confirm with CVM`,est:true}}
 const molCls=s=>!s||s==='Not assessable'?null:/^Class III/.test(s)?'III':/^Class II/.test(s)?'II':'I';
@@ -1227,6 +1321,7 @@ function renderPlan(){const a=analyze(cur),pt=cur.pt;const lvl=['t-ok','t-warn',
   h+=`<div class="card"><div style="font-size:16px;margin-bottom:6px"><b>${esc(pt.name||'This patient')}</b>${a.A!=null?', '+a.A+' y':''}${pt.sex?' · '+(pt.sex==='F'?'female':'male'):''}</div>${pt.cc?`<div class="note">Complaint: ${esc(pt.cc)}</div>`:''}<p style="margin:8px 0 0">${esc(a.summary||'Add records to build the diagnosis.')}</p></div>`;
   const groups={};for(const f of a.F)(groups[f.a]=groups[f.a]||[]).push(f);
   h+='<div class="card"><table>'+Object.entries(groups).map(([g,fs])=>`<tr><td colspan="2" style="font-weight:700;padding-top:10px">${g}</td></tr>`+fs.map(f=>`<tr><td style="width:24px"><span class="tag ${lvl[f.l]||'t-ok'}">${f.l?'!':'✓'}</span></td><td>${esc(f.t)}</td></tr>`).join('')).join('')+'</table></div>';
+  h+=`<h2>Orthodontist's cephalometric interpretation</h2><div class="card">${interpHTML(cephInterp(cur))}</div>`;
   h+=`<h2>Problem list</h2><div class="card">${a.P.length?'<ul class="prob">'+a.P.map(p=>`<li>${esc(p)}</li>`).join('')+'</ul>':'<span class="muted">No problems recorded yet.</span>'}</div>`;
   h+=`<h2>Treatment objectives</h2><div class="card"><ul class="prob">${a.obj.map(p=>`<li>${esc(p)}</li>`).join('')}</ul></div>`;
   h+=`<h2>Treatment options</h2><p class="note">Generated from the records using published criteria. Tick the ones you want in the final plan. Use the Research tab for the latest evidence on any option.</p>`;
@@ -1267,7 +1362,7 @@ $('#qOut').onclick=e=>{const i=e.target.dataset.save;if(i==null)return;const x=l
 
 /* ---------- printable report ---------- */
 $('#printBtn').onclick=async()=>{const a=analyze(cur),pt=cur.pt;let h=`<h1>Orthodontic assessment — ${esc(pt.name||'')}</h1><div>${esc([pt.file&&'File '+pt.file,a.A!=null&&a.A+' years',pt.sex&&(pt.sex==='F'?'Female':'Male'),pt.recDate&&'Records '+pt.recDate].filter(Boolean).join(' · '))}</div>`;
-  if(pt.cc)h+=`<p><b>Chief complaint:</b> ${esc(pt.cc)}</p>`;h+=`<h2>Diagnosis</h2><p>${esc(a.summary)}</p><ul>${a.F.map(f=>`<li>${esc(f.a)}: ${esc(f.t)}</li>`).join('')}</ul><h2>Problem list</h2><ol>${a.P.map(p=>`<li>${esc(p)}</li>`).join('')}</ol>`;
+  if(pt.cc)h+=`<p><b>Chief complaint:</b> ${esc(pt.cc)}</p>`;h+=`<h2>Diagnosis</h2><p>${esc(a.summary)}</p><ul>${a.F.map(f=>`<li>${esc(f.a)}: ${esc(f.t)}</li>`).join('')}</ul><h2>Orthodontist's cephalometric interpretation</h2>${interpHTML(cephInterp(cur))}<h2>Problem list</h2><ol>${a.P.map(p=>`<li>${esc(p)}</li>`).join('')}</ol>`;
   const M=analysisView(a.M).filter(m=>m.v!=null);if(M.length)h+=`<h2>Cephalometric values — ${esc(ANALYSES[curAnalysis()].name)}</h2><table><tr><th>Measure</th><th>Value</th><th>Norm</th><th></th></tr>${M.map(m=>`<tr><td>${esc(m.name)}</td><td>${r1(m.v)} ${m.unit}</td><td>${m.norm} ± ${m.sd}</td><td>${esc(m.txt)}</td></tr>`).join('')}</table>`;
   const RM=(cur.ceph.meas||[]).map(measLabel);if(RM.length)h+=`<h2>Measurements on the ceph</h2><ol>${RM.map(t=>`<li>${esc(t)}</li>`).join('')}</ol>`;
   if(cephView.img){try{h+=`<h2>Ceph tracing</h2><img src="${$('#cCv').toDataURL('image/jpeg',0.85)}">`}catch(e){}}
