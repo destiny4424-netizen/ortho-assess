@@ -9,6 +9,9 @@
 <meta name="apple-mobile-web-app-title" content="Ortho Assess">
 <meta name="theme-color" content="#1d4ed8">
 <title>Ortho Assess</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
 :root{--bg:#f5f6f8;--card:#fff;--ink:#16202a;--mute:#5f6b78;--line:#dce1e6;--accent:#1d4ed8;--accent-ink:#fff;--soft:#1d4ed814;--ok:#15803d;--warn:#b45309;--bad:#b42318;--canvas:#0b0f14}
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0e1318;--card:#161e25;--ink:#e6ecf1;--mute:#93a0ad;--line:#2a343d;--accent:#60a5fa;--accent-ink:#06162e;--soft:#60a5fa1f;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171}}
@@ -93,6 +96,7 @@ td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .th{width:40px;min-width:40px;height:46px;border:1px solid var(--line);border-radius:7px;background:var(--card);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;font-size:12px;padding:0}
 .th small{font-size:10px;font-weight:700;min-height:12px}
 .th.prim{height:40px;border-style:dashed}
+.th.mt{width:34px;min-width:34px;height:40px;font-size:11px}.th.mt small{font-size:9.5px;font-weight:600;color:var(--mute)}.th.on,.chip.on{outline:2px solid var(--accent);background:var(--soft)}
 .legend{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
 .legend button{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:4px 10px;font-size:13px;cursor:pointer}
 .legend button[aria-pressed=true]{outline:2px solid var(--accent)}
@@ -289,10 +293,10 @@ dialog::backdrop{background:#000a}
       <div class="card">
         <h3 style="margin-top:0">Measurement</h3>
         <div id="mRes" class="note">Choose 📏 Distance and tap two points on the model (e.g. the mesial and distal contact points of a tooth). Use 〰 Arch length to tap along the arch from first molar to first molar, then press Done.</div>
-        <div class="row" style="margin-top:8px">
-          <select class="btn sm" id="mSaveTo" style="flex:1"></select>
-          <button class="btn sm primary" id="mSave">Save</button>
-        </div>
+        <div class="note" id="mTargetNote" style="margin-top:8px"></div>
+        <div class="chart" id="mChart" style="margin-top:6px"></div>
+        <div class="chips" id="mTargets"></div>
+        <div class="row"><button class="btn sm primary" id="mSave">Save</button></div>
         <div class="row" style="margin-top:6px"><button class="btn sm" id="mDone" hidden>Done</button></div>
       </div>
       <div class="card note" id="mInfo">No models loaded.</div>
@@ -369,6 +373,7 @@ dialog::backdrop{background:#000a}
     <button class="btn sm" id="cAng" aria-pressed="false" title="Tap three points: end, corner, end">∠ Angle</button>
     <button class="btn sm" id="cMag" aria-pressed="true" title="Zoom circle while you place or drag a point">🔍 Magnifier</button>
     <button class="btn sm" id="cFit">Fit</button>
+    <button class="btn sm" id="cEdit" title="Crop / rotate — landmarks move with the picture">✂️ Edit</button>
   </div>
   <div class="split">
     <div class="stage" id="cStage"><canvas id="cCv"></canvas><div class="empty" id="cEmpty">Upload or drop a lateral ceph — DICOM (.dcm), JPEG, PNG, TIFF, HEIC or PDF.<br>Then press ✨ Auto-detect, or tap each landmark in turn. Drag any point to adjust it.</div><div class="hint" id="cHint" hidden></div></div>
@@ -410,6 +415,7 @@ dialog::backdrop{background:#000a}
     <label class="note">◐ <input type="range" id="oCon" min="0.4" max="2.5" step="0.05" value="1"></label>
     <button class="btn sm" id="oInv" aria-pressed="false">Invert</button>
     <button class="btn sm" id="oFit">Fit</button>
+    <button class="btn sm" id="oEdit">✂️ Edit</button>
   </div>
   <div class="stage" id="oStage" style="height:min(55vh,560px)"><canvas id="oCv"></canvas><div class="empty" id="oEmpty">Upload or drop the OPG — DICOM, JPEG, PNG, TIFF, HEIC or PDF. Drag to move, scroll or pinch to zoom.</div></div>
   <h2>Dental chart</h2>
@@ -468,10 +474,11 @@ dialog::backdrop{background:#000a}
 </main>
 
 <dialog id="pvDlg"><div class="pv" id="pvBox"><img id="pvImg" alt=""><svg class="gridov" viewBox="0 0 100 100" preserveAspectRatio="none"><g stroke="#0ff" stroke-width=".25" fill="none" opacity=".85"><line x1="50" y1="0" x2="50" y2="100"/><line x1="0" y1="33.3" x2="100" y2="33.3"/><line x1="0" y1="66.6" x2="100" y2="66.6"/><line x1="25" y1="0" x2="25" y2="100" stroke-dasharray="1 1"/><line x1="75" y1="0" x2="75" y2="100" stroke-dasharray="1 1"/></g></svg></div>
-  <div class="row" style="padding:10px"><b id="pvTitle" style="flex:1"></b><button class="btn sm" id="pvGrid" aria-pressed="false">Grid</button><label class="btn sm"><input type="file" id="pvRep" hidden>Replace</label><button class="btn sm danger" id="pvDel">Remove</button><button class="btn sm primary" id="pvClose">Close</button></div></dialog>
+  <div class="row" style="padding:10px"><b id="pvTitle" style="flex:1"></b><button class="btn sm" id="pvGrid" aria-pressed="false">Grid</button><button class="btn sm" id="pvEdit">✂️ Edit</button><label class="btn sm"><input type="file" id="pvRep" hidden>Replace</label><button class="btn sm danger" id="pvDel">Remove</button><button class="btn sm primary" id="pvClose">Close</button></div></dialog>
 
 <dialog id="moreDlg"><div style="padding:16px;display:flex;flex-direction:column;gap:8px">
   <b>Case</b>
+  <button class="btn" id="waBtn">📲 Get files from WhatsApp</button>
   <button class="btn" id="sumBtn2">🧾 One-page summary sheet</button>
   <button class="btn" id="expBtn">Export this case (backup file)</button>
   <label class="btn" style="text-align:center"><input type="file" id="impFile" accept=".json,application/json" hidden>Import case file(s)</label>
@@ -488,6 +495,22 @@ dialog::backdrop{background:#000a}
   <div class="note" id="anErr" style="color:var(--bad)"></div>
   <div class="row"><button class="btn primary" value="save">Save</button><button class="btn danger" value="delete" id="anDel" formnovalidate hidden>Delete</button><button class="btn" value="cancel" formnovalidate>Cancel</button></div>
 </form></dialog>
+<dialog id="edDlg" style="width:min(980px,calc(100vw - 16px))"><div style="padding:12px;display:flex;flex-direction:column;gap:8px">
+  <div class="row"><b id="edTitle" style="flex:1">Edit picture</b><span class="note" id="edSize"></span></div>
+  <canvas id="edCv" style="width:100%;height:min(62vh,560px);background:#0b0f14;border-radius:10px;touch-action:none;display:block"></canvas>
+  <div class="row"><button class="btn sm" id="edL" title="Rotate left">⟲ 90°</button><button class="btn sm" id="edR" title="Rotate right">⟳ 90°</button><button class="btn sm" id="edFlip">⇋ Flip</button>
+    <label class="note" style="display:flex;align-items:center;gap:6px">Straighten <input type="range" id="edFine" min="-30" max="30" step="0.5" value="0" style="width:140px"><span id="edFineV">0°</span></label>
+    <select class="btn sm" id="edAspect"><option value="0">Free crop</option><option value="1">Square 1:1</option><option value="1.3333">4:3</option><option value="0.75">3:4 (portrait)</option><option value="1.5">3:2</option><option value="1.7778">16:9</option></select>
+    <button class="btn sm" id="edReset">Reset</button><span style="flex:1"></span><button class="btn sm" id="edCancel">Cancel</button><button class="btn sm primary" id="edSave">Save</button></div>
+  <div class="note">Drag inside the box to move it, drag a corner to resize, or drag outside to draw a new crop.</div>
+</div></dialog>
+<dialog id="waDlg"><div style="padding:16px;display:flex;flex-direction:column;gap:10px">
+  <b>📲 Get files from WhatsApp</b>
+  <div><b>Android</b> — add Ortho Assess to the home screen once (Chrome ⋮ → Add to Home screen / Install app). Then in WhatsApp long-press the STL, X-ray, photo, PDF or ZIP → Share → <b>Ortho Assess</b>. It opens and adds the files to the case on screen.</div>
+  <div><b>iPhone</b> — in WhatsApp tap the file → Share → <b>Save to Files</b>. Then tap <b>⬆ Add files</b> here and pick it from Files (Recents). Photos: Share → Save image, then Add files → Photo Library.</div>
+  <div><b>Computer (WhatsApp Web / Desktop)</b> — drag the file from WhatsApp straight onto this page.</div>
+  <div class="row"><label class="btn primary"><input type="file" id="waPick" multiple hidden>⬆ Add files now</label><button class="btn" onclick="this.closest('dialog').close()">Close</button></div>
+</div></dialog>
 <dialog id="keyDlg"><form method="dialog" id="keyForm" style="padding:16px;display:flex;flex-direction:column;gap:10px">
   <b>Claude AI key for Auto-detect</b>
   <span class="note">Create a key at console.anthropic.com → API Keys (it starts with sk-ant-) and paste it here. It is saved only in this browser on this device and is sent only to Anthropic when you press ✨ Auto-detect. Each ceph costs a few cents of Anthropic credit.</span>
@@ -573,7 +596,7 @@ document.addEventListener('input',onField);document.addEventListener('change',on
 function onField(e){const el=e.target;if(!el.dataset||!el.dataset.k||!cur)return;let v=el.type==='checkbox'?el.checked:el.value;if(el.type==='number')v=v===''?'':+v;
   setP(cur,el.dataset.k,v);save();const k=el.dataset.k;
   if(k.startsWith('pt.name')||k.startsWith('pt.file')){const o=$('#caseSel').selectedOptions[0];if(o)o.textContent=caseLabel(cur)}
-  if(/^(w\.|arch\.|occ\.|plan\.(anch|lip)Sim)/.test(k)){renderAnalysis();renderPlanner();renderPred()}
+  if(/^(w\.|arch\.|occ\.|plan\.(anch|lip)Sim)/.test(k)){renderAnalysis();renderPlanner();renderPred();fillSaveTo()}
   if(k==='fx.predScale')renderPred();
   if(k.startsWith('ceph.'))renderCephTable(),cephView.draw(),renderCvm();
   if(k==='pt.sex'){renderPopNote();renderCephTable()}
@@ -942,6 +965,9 @@ $('#cGrid').onclick=e=>{cephView.grid=!cephView.grid;e.target.setAttribute('aria
 try{$('#cInst').checked=localStorage.getItem('oa-instant')==='1'}catch(e){}
 $('#cInst').onchange=e=>{try{localStorage.setItem('oa-instant',e.target.checked?'1':'0')}catch(err){}if(e.target.checked)toast('⚡ Instant on: ✨ Auto-detect will run as soon as a ceph is uploaded')};
 fillAnalysisSelects();
+$('#cEdit').onclick=()=>editXray('ceph');$('#oEdit').onclick=()=>editXray('opg');
+$('#pvEdit').onclick=async()=>{const slot=phSlot,b=await DB.getBlob(cur.photos[slot]);$('#pvDlg').close();openEditor(b,SLOTS.find(s=>s[0]===slot)[1],async(blob,map)=>{if(slot==='ep'&&cur.fx.pred&&cur.fx.pred.pts){const keep=cur.fx.pred.pts;for(const k in keep)keep[k]=map(keep[k]);const old=cur.photos.ep,k2='b:'+uid();await DB.putBlob(k2,blob);cur.photos.ep=k2;await DB.delBlob(old);saveNow();renderPhotos();predImg=null;renderPred()}else await storePhoto(slot,blob);toast('Picture saved')})};
+$('#waBtn').onclick=()=>{$('#moreDlg').close();$('#waDlg').showModal()};$('#waPick').onchange=e=>{const fs=[...e.target.files];e.target.value='';$('#waDlg').close();if(fs.length)routeFiles(fs)};
 $('#mAuto').onclick=autoMeasure;$('#mSwap').onclick=swapSides;$('#mPts').onclick=e=>{e.target.setAttribute('aria-pressed',e.target.getAttribute('aria-pressed')!=='true');showToothMarks()};
 $('#extViews').onclick=e=>{const b=e.target.closest('[data-v]');if(b&&!b.disabled)showExtraction(b.dataset.v)};
 $('#predCv').onclick=e=>{if(!predImg)return;const r=e.target.getBoundingClientRect(),pts=((cur.fx.pred=cur.fx.pred||{}).pts=cur.fx.pred.pts||{}),need=PRED_PTS.find(([p])=>!pts[p]);if(!need)return;
@@ -1148,6 +1174,64 @@ class MeshView{
   up(e){if(!this.ptrs.has(e.pointerId))return;this.ptrs.delete(e.pointerId);if(!this.ptrs.size&&!this.moved&&this.btn===0&&this.mode){const p=this.pick(e.clientX,e.clientY);if(p)this.onPick(p);else toast('Tap on the model surface')}}
 }
 const mesh=new MeshView($('#mStage'),$('#mGL'),$('#mOv'));
+/* ---------- picture editor: crop, rotate, straighten, flip ---------- */
+let ED=null;
+async function openEditor(blob,title,onSave){const u=URL.createObjectURL(blob);let img;try{img=await loadImg(u)}catch(e){URL.revokeObjectURL(u);return toast('Could not open the picture')}
+  ED={img,u,rot:0,fine:0,flip:false,aspect:0,onSave,crop:null,drag:null};$('#edTitle').textContent='Edit — '+title;$('#edFine').value=0;$('#edFineV').textContent='0°';$('#edAspect').value='0';$('#edDlg').showModal();setTimeout(()=>{edFull();edDraw()},30)}
+function edGeom(){const{img,rot,fine}=ED,th=(rot*90+fine)*Math.PI/180,c=Math.abs(Math.cos(th)),s=Math.abs(Math.sin(th));return{th,W:img.width*c+img.height*s,H:img.width*s+img.height*c}}
+function edFull(){const g=edGeom(),{img}=ED,odd=ED.rot%2!==0,bw=odd?img.height:img.width,bh=odd?img.width:img.height;
+  if(ED.fine===0){ED.crop={x:0,y:0,w:g.W,h:g.H};return edAspectFit()}
+  const f=Math.abs(ED.fine)*Math.PI/180,inside=k=>{const hw=k*bw/2,hh=k*bh/2;return[[hw,hh],[hw,-hh],[-hw,hh],[-hw,-hh]].every(([x,y])=>{const xr=x*Math.cos(f)+y*Math.sin(f),yr=-x*Math.sin(f)+y*Math.cos(f);return Math.abs(xr)<=bw/2+1e-6&&Math.abs(yr)<=bh/2+1e-6})};
+  let lo=0,hi=1;for(let i=0;i<30;i++){const m=(lo+hi)/2;inside(m)?lo=m:hi=m}// largest straight crop that has no empty corners
+  ED.crop={x:(g.W-lo*bw)/2,y:(g.H-lo*bh)/2,w:lo*bw,h:lo*bh};edAspectFit()}
+function edAspectFit(){const a=ED.aspect;if(!a)return;const c=ED.crop,cx=c.x+c.w/2,cy=c.y+c.h/2;let w=c.w,h=c.h;if(w/h>a)w=h*a;else h=w/a;ED.crop={x:cx-w/2,y:cy-h/2,w,h}}
+function edView(){const cv=$('#edCv'),r=cv.getBoundingClientRect(),d=window.devicePixelRatio||1;cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d);const g=edGeom(),s=Math.min(cv.width/g.W,cv.height/g.H)*0.94;return{cv,d,g,s,ox:(cv.width-g.W*s)/2,oy:(cv.height-g.H*s)/2}}
+function edPaint(x,g,{img,flip}){x.translate(g.W/2,g.H/2);x.rotate(g.th);x.scale(flip?-1:1,1);x.drawImage(img,-img.width/2,-img.height/2)}
+function edDraw(){if(!ED)return;const V=edView(),x=V.cv.getContext('2d'),c=ED.crop;x.setTransform(1,0,0,1,0,0);x.fillStyle='#0b0f14';x.fillRect(0,0,V.cv.width,V.cv.height);
+  x.setTransform(V.s,0,0,V.s,V.ox,V.oy);edPaint(x,V.g,ED);x.setTransform(1,0,0,1,0,0);const R=[V.ox+c.x*V.s,V.oy+c.y*V.s,c.w*V.s,c.h*V.s];
+  x.fillStyle='#000a';x.beginPath();x.rect(0,0,V.cv.width,V.cv.height);x.rect(R[0],R[1],R[2],R[3]);x.fill('evenodd');x.strokeStyle='#fff';x.lineWidth=2*V.d;x.strokeRect(...R);
+  x.strokeStyle='#ffffff66';x.lineWidth=1*V.d;x.beginPath();for(const t of[1/3,2/3]){x.moveTo(R[0]+R[2]*t,R[1]);x.lineTo(R[0]+R[2]*t,R[1]+R[3]);x.moveTo(R[0],R[1]+R[3]*t);x.lineTo(R[0]+R[2],R[1]+R[3]*t)}x.stroke();
+  x.fillStyle='#fff';for(const[hx,hy]of[[0,0],[1,0],[0,1],[1,1]]){x.fillRect(R[0]+R[2]*hx-6*V.d,R[1]+R[3]*hy-6*V.d,12*V.d,12*V.d)}ED.V=V;
+  $('#edSize').textContent=`${Math.round(c.w)} × ${Math.round(c.h)} px`}
+function edPt(e){const V=ED.V,r=V.cv.getBoundingClientRect();return[((e.clientX-r.left)*V.d-V.ox)/V.s,((e.clientY-r.top)*V.d-V.oy)/V.s]}
+$('#edCv').addEventListener('pointerdown',e=>{if(!ED||!ED.V)return;e.target.setPointerCapture(e.pointerId);const p=edPt(e),c=ED.crop,tol=16*ED.V.d/ED.V.s;
+  const corner=[[0,0],[1,0],[0,1],[1,1]].find(([hx,hy])=>Math.abs(p[0]-(c.x+c.w*hx))<tol&&Math.abs(p[1]-(c.y+c.h*hy))<tol);
+  ED.drag=corner?{t:'c',hx:corner[0],hy:corner[1]}:p[0]>c.x&&p[0]<c.x+c.w&&p[1]>c.y&&p[1]<c.y+c.h?{t:'m',p,c0:{...c}}:{t:'n',p}});
+$('#edCv').addEventListener('pointermove',e=>{if(!ED||!ED.drag)return;const p=edPt(e),g=edGeom(),c=ED.crop,D=ED.drag,cl=(v,a,b)=>Math.max(a,Math.min(b,v)),a=ED.aspect;
+  if(D.t==='m'){c.x=cl(D.c0.x+p[0]-D.p[0],0,g.W-c.w);c.y=cl(D.c0.y+p[1]-D.p[1],0,g.H-c.h)}
+  else{let ax,ay;if(D.t==='n'){ax=D.p[0];ay=D.p[1]}else{ax=D.hx?c.x:c.x+c.w;ay=D.hy?c.y:c.y+c.h}const bx=cl(p[0],0,g.W),by=cl(p[1],0,g.H);let w=Math.abs(bx-ax),h=Math.abs(by-ay);if(a){if(w/h>a)w=h*a;else h=w/a}
+    if(w<20||h<20)return;ED.crop={x:bx<ax?ax-w:ax,y:by<ay?ay-h:ay,w,h}}edDraw()});
+$('#edCv').addEventListener('pointerup',()=>{if(ED)ED.drag=null});
+$('#edL').onclick=()=>{ED.rot=(ED.rot+3)%4;edFull();edDraw()};$('#edR').onclick=()=>{ED.rot=(ED.rot+1)%4;edFull();edDraw()};$('#edFlip').onclick=()=>{ED.flip=!ED.flip;edDraw()};
+$('#edFine').oninput=e=>{ED.fine=+e.target.value;$('#edFineV').textContent=ED.fine+'°';edFull();edDraw()};$('#edAspect').onchange=e=>{ED.aspect=+e.target.value;edFull();edDraw()};
+$('#edReset').onclick=()=>{Object.assign(ED,{rot:0,fine:0,flip:false,aspect:0});$('#edFine').value=0;$('#edFineV').textContent='0°';$('#edAspect').value='0';edFull();edDraw()};
+$('#edCancel').onclick=()=>{$('#edDlg').close()};$('#edDlg').addEventListener('close',()=>{if(ED){URL.revokeObjectURL(ED.u);ED=null}});
+$('#edSave').onclick=async()=>{const g=edGeom(),c=ED.crop,{img,flip}=ED,out=document.createElement('canvas'),k=Math.min(1,6000/Math.max(c.w,c.h));out.width=Math.round(c.w*k);out.height=Math.round(c.h*k);
+  const x=out.getContext('2d');x.setTransform(k,0,0,k,-c.x*k,-c.y*k);edPaint(x,g,ED);
+  const map=([px,py])=>{let X=(px-img.width/2)*(flip?-1:1),Y=py-img.height/2;const cs=Math.cos(g.th),sn=Math.sin(g.th);return[r1((X*cs-Y*sn+g.W/2-c.x)*k),r1((X*sn+Y*cs+g.H/2-c.y)*k)]};
+  const b=await canvasBlob(out,'image/jpeg',0.93),cb=ED.onSave;$('#edDlg').close();await cb(b,map,k)};
+function mapCephData(map,k){const C=cur.ceph;for(const kk in C.pts)C.pts[kk]=map(C.pts[kk]);for(const m of C.meas||[])m.p=m.p.map(map);for(const V in C.vert||{})for(const kk in C.vert[V])C.vert[V][kk]=map(C.vert[V][kk]);if(k!==1&&num(C.mmpp))C.mmpp=+(C.mmpp/k).toFixed(5)}
+async function editXray(which){const k=cur[which].img;if(!k)return toast('Upload the '+(which==='ceph'?'ceph':'OPG')+' first');const b=await DB.getBlob(k);
+  openEditor(b,which==='ceph'?'lateral ceph':'OPG',async(blob,map,sc)=>{if(which==='ceph')mapCephData(map,sc);await storeXray(which,{blob},which==='ceph'?cephView:opgView);if(which==='ceph'){renderLm();renderCephTable();renderLive(null);renderCvm()}toast('Picture saved')})}
+/* ---------- files shared from WhatsApp (Android share menu) ---------- */
+function inboxDB(){return new Promise((res,rej)=>{const r=indexedDB.open('oa-inbox',1);r.onupgradeneeded=()=>r.result.createObjectStore('files',{autoIncrement:true});r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+async function takeShared(){if(!/[?&]shared=1/.test(location.search))return;history.replaceState(null,'',location.pathname);try{const db=await inboxDB(),items=await new Promise((res,rej)=>{const t=db.transaction('files','readwrite'),s=t.objectStore('files'),q=s.getAll();t.oncomplete=()=>res(q.result);t.onerror=()=>rej(t.error);s.clear()});
+  const files=items.map(it=>new File([it.blob],it.name||'shared-file',{type:it.type||''}));if(files.length){toast('Received '+files.length+' file'+(files.length>1?'s':'')+' from the share menu');await routeFiles(files)}}catch(e){toast('Could not read the shared files: '+e.message)}}
+if('serviceWorker'in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+/* ---------- tooth chart for saving 3D measurements ---------- */
+let saveTarget=null;
+const MCH_U=[17,16,15,14,13,12,11,21,22,23,24,25,26,27],MCH_L=[47,46,45,44,43,42,41,31,32,33,34,35,36,37],MCH_ORDER=[...MCH_U,...MCH_L];
+const ARCH_T=[['arch.availU','Upper arch length'],['arch.availL','Lower arch length'],['arch.icwU','Upper inter-canine'],['arch.imwU','Upper inter-molar'],['arch.icwL','Lower inter-canine'],['arch.imwL','Lower inter-molar'],['occ.oj','Overjet'],['occ.ob','Overbite'],['occ.spee','Curve of Spee']];
+function fillSaveTo(){if(!cur||!$('#mChart'))return;const cell=t=>{const k='w.'+t,v=num(cur.w[t]);return`<button class="th mt${saveTarget===k?' on':''}" data-st="${k}" title="Tooth ${t}">${t}<small>${v!=null?v.toFixed(1):'–'}</small></button>`};
+  const row=a=>`<div class="r">${a.slice(0,7).map(cell).join('')}<span class="gap"></span>${a.slice(7).map(cell).join('')}</div>`;
+  $('#mChart').innerHTML=row(MCH_U)+row(MCH_L)+'<div class="note" style="text-align:center">Patient\'s right ← → left</div>';
+  $('#mTargets').innerHTML=ARCH_T.map(([k,l])=>{const v=getP(cur,k);return`<button class="chip${saveTarget===k?' on':''}" data-st="${k}">${esc(l)}${v!=null&&v!==''?' · '+v:''}</button>`}).join('');
+  $('#mTargetNote').textContent=saveTarget?(lastMeas!=null?'Tap Save, or another tooth, to store '+lastMeas.toFixed(2)+' mm.':'Selected: '+(saveTarget.startsWith('w.')?'tooth '+saveTarget.slice(2):ARCH_T.find(a=>a[0]===saveTarget)[1])+' — measure it and it is saved automatically.'):(lastMeas!=null?'Tap the tooth (or measurement) to save '+lastMeas.toFixed(2)+' mm to.':'Tap a tooth to choose where the next measurement goes.')}
+function suggestSave(kind){if(kind==='arch'&&!(saveTarget||'').startsWith('arch.'))saveTarget=cur.arch.availU?'arch.availL':'arch.availU';if(saveTarget&&lastMeas!=null&&kind==='tooth'&&saveTarget.startsWith('w.'))return commitSave(saveTarget);fillSaveTo()}
+function commitSave(k){setP(cur,k,+lastMeas.toFixed(2));save();bindAll();renderWidths();renderAnalysis();renderPlanner();toast('Saved '+lastMeas.toFixed(2)+' mm to '+(k.startsWith('w.')?'tooth '+k.slice(2):ARCH_T.find(a=>a[0]===k)[1]));
+  mesh.marks=[];lastMeas=null;mesh.render();if(k.startsWith('w.')){const i=MCH_ORDER.indexOf(+k.slice(2)),nx=MCH_ORDER.slice(i+1).find(t=>num(cur.w[t])==null);saveTarget=nx?'w.'+nx:null}else saveTarget=null;
+  if(mesh.mode==='dist')$('#mRes').textContent=saveTarget?'Saved. Now measure tooth '+saveTarget.slice(2)+'.':'Saved.';fillSaveTo()}
+
 /* ---------- automatic model analysis on the 3D scans ---------- */
 const origP={};
 const v3=(a,b,s=1)=>[a[0]+b[0]*s,a[1]+b[1]*s,a[2]+b[2]*s],d3=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],x3=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],n3=a=>{const l=Math.hypot(a[0],a[1],a[2])||1;return[a[0]/l,a[1]/l,a[2]/l]};
@@ -1222,7 +1306,7 @@ async function autoMeasure(){if(!origP.upper&&!origP.lower)return toast('Upload 
   finally{btn.disabled=false;btn.textContent='✨ Auto-measure teeth';$('#mHint').hidden=true;showToothMarks();renderAutoInfo();renderPlanner()}}
 function applyMetrics(side){const A=cur.models.auto[side];if(!A)return;const M=teethMetrics(side,A);for(const k in M.w)if((side==='upper'?UW:LW).includes(+k))cur.w[k]=M.w[k];
   const U=side==='upper';if(M.icw)cur.arch[U?'icwU':'icwL']=M.icw;if(M.imw)cur.arch[U?'imwU':'imwL']=M.imw;if(M.avail)cur.arch[U?'availU':'availL']=M.avail;if(!U&&M.spee!=null)cur.occ.spee=M.spee;
-  A.metrics=M;bindAll();renderWidths();renderAnalysis()}
+  A.metrics=M;bindAll();renderWidths();renderAnalysis();fillSaveTo()}
 function swapSides(){for(const side of['upper','lower']){const A=cur.models.auto&&cur.models.auto[side];if(!A)continue;const sw={};for(const k in A.teeth){const q=Math.floor(k/10),u=k%10,nq={1:2,2:1,3:4,4:3}[q];sw[nq*10+u]=A.teeth[k]}A.teeth=sw;applyMetrics(side)}saveNow();showToothMarks();renderAutoInfo();renderPlanner();toast('Left and right swapped')}
 function showToothMarks(){mesh.tmarks=[];if($('#mPts').getAttribute('aria-pressed')!=='true'||extView!=='before'){mesh.render();return}for(const side of['upper','lower']){const A=cur.models.auto&&cur.models.auto[side];if(!A||!mesh.meshes[side]||!mesh.meshes[side].vis)continue;
   for(const k in A.teeth){const t=A.teeth[k];mesh.tmarks.push({p:t.m,col:'#22d3ee'},{p:t.d,col:'#22d3ee'});if(t.c)mesh.tmarks.push({p:t.c,col:t.conf==='low'?'#f97316':'#facc15',lab:k})}}mesh.render()}
@@ -1347,9 +1431,8 @@ mesh.onPick=p=>{if(mesh.mode==='dist'){if(mesh.marks.length>=2)mesh.marks=[];mes
 $('#mDone').onclick=()=>{if(mesh.marks.length<2)return toast('Tap at least two points');$('#mRes').innerHTML=`Arch length: <b>${lastMeas.toFixed(2)} mm</b> — save it below.`;suggestSave('arch');mesh.mode=null;$('#mPoly').setAttribute('aria-pressed',false);$('#mDone').hidden=true;$('#mHint').hidden=true};
 const SAVE_TARGETS=[...[16,15,14,13,12,11,21,22,23,24,25,26].map(t=>['w.'+t,'Width of tooth '+t]),...[46,45,44,43,42,41,31,32,33,34,35,36].map(t=>['w.'+t,'Width of tooth '+t]),
   ['arch.availU','Upper arch length available'],['arch.availL','Lower arch length available'],['arch.icwU','Upper inter-canine width'],['arch.imwU','Upper inter-molar width'],['arch.icwL','Lower inter-canine width'],['arch.imwL','Lower inter-molar width'],['occ.oj','Overjet'],['occ.ob','Overbite'],['occ.spee','Curve of Spee depth']];
-function fillSaveTo(){$('#mSaveTo').innerHTML='<option value="">Save measurement as…</option>'+SAVE_TARGETS.map(([k,l])=>`<option value="${k}">${l}${getP(cur,k)!=null&&getP(cur,k)!==''?' ('+getP(cur,k)+')':''}</option>`).join('')}
-function suggestSave(kind){fillSaveTo();const s=$('#mSaveTo');if(kind==='arch')s.value=cur.arch.availU?'arch.availL':'arch.availU';else{const nx=SAVE_TARGETS.find(([k])=>k.startsWith('w.')&&num(getP(cur,k))==null);s.value=nx?nx[0]:''}}
-$('#mSave').onclick=()=>{const k=$('#mSaveTo').value;if(lastMeas==null)return toast('Measure something first');if(!k)return toast('Choose where to save it');setP(cur,k,+lastMeas.toFixed(2));save();bindAll();renderWidths();renderAnalysis();toast('Saved '+lastMeas.toFixed(2)+' mm');mesh.marks=[];lastMeas=null;mesh.render();if(mesh.mode==='dist')$('#mRes').textContent='Saved. Tap two points for the next tooth.';fillSaveTo()};
+$('#mChart').onclick=$('#mTargets').onclick=e=>{const b=e.target.closest('[data-st]');if(!b)return;const k=b.dataset.st;if(lastMeas!=null)return commitSave(k);saveTarget=saveTarget===k?null:k;fillSaveTo()};
+$('#mSave').onclick=()=>{if(lastMeas==null)return toast('Measure something first');if(!saveTarget)return toast('Tap the tooth or measurement to save it to');commitSave(saveTarget)};
 
 /* ---------- widths, Bolton, space analysis ---------- */
 const UW=[16,15,14,13,12,11,21,22,23,24,25,26],LW=[46,45,44,43,42,41,31,32,33,34,35,36];
@@ -1777,6 +1860,7 @@ addEventListener('pagehide',()=>saveNow());document.addEventListener('visibility
 (async()=>{await DB.open();try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}cases=await DB.all()||[];
   let last=null;try{last=localStorage.getItem('oa-last')}catch(e){}
   if(!cases.length)await newCase();else await openCase(cases.find(c=>c.id===last)||cases[0]);
+  takeShared();
   window.OA={cephView,mesh,analyze:()=>analyze(cur),cephMeasures:()=>cephMeasures(cur),get cur(){return cur}}})();
 </script>
 </body>

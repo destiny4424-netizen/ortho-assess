@@ -16,6 +16,13 @@ Orthodontic case assessment that runs in the browser — one HTML file, no build
 - Diagnosis & plan: problem list, objectives and evidence-linked treatment options; Export PDF.
 - Research: searches the published literature (Europe PMC) — only the search words are sent.
 
+## Getting files in
+- ⬆ Add files, drag-and-drop or paste — any format; the app sorts photos, X-rays and scans.
+- **From WhatsApp:** on Android, install the app (Chrome ⋮ → Add to Home screen), then WhatsApp → Share →
+  Ortho Assess (Web Share Target, `manifest.json` + `sw.js`; the service worker caches nothing). On iPhone,
+  WhatsApp → Share → Save to Files, then ⬆ Add files. On a computer, drag from WhatsApp Web / Desktop.
+- ✂️ Edit crops, rotates, straightens and flips photos, cephs and OPGs; ceph landmarks move with the picture.
+
 ## Privacy
 Every record — details, photos, scans, X-rays — is kept only in the browser on the device that made it
 (IndexedDB). Nothing is uploaded, except that ✨ Auto-detect sends the X-ray image (no name or details) to
