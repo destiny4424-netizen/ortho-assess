@@ -228,6 +228,13 @@ dialog::backdrop{background:#000a}
   <h2>Photographs</h2>
   <p class="note">Tap a box to add a photo, or drop / ⬆ Add files for several at once — JPEG, HEIC (iPhone), PNG, TIFF, BMP, WebP, PDF and DICOM all work. Tap a photo to view it with a facial grid, replace or remove it.</p>
   <div class="slots" id="slots"></div>
+  <h2>Profile after treatment (prediction)</h2>
+  <div class="card">
+    <div class="note" id="predInfo"></div>
+    <div class="row" style="margin:8px 0"><label class="f">Scale: subnasale to soft-tissue chin (mm)<input type="number" step="0.5" data-k="fx.predScale" id="predScale"></label><label class="f" style="flex:1">Before ⟷ After<input type="range" id="predSplit" min="0" max="100" value="50"></label><button class="btn sm" id="predReset">Re-tap points</button><button class="btn sm" id="predSave">⬇ Save image</button></div>
+    <canvas id="predCv" style="max-width:100%;border-radius:10px;cursor:crosshair;display:block"></canvas>
+    <div class="note">The lips are moved back by the planner's estimate for the chosen extraction pattern (Extraction planner on the 3D models tab). Soft-tissue response varies between patients — use it to discuss, not to promise.</div>
+  </div>
   <h2>Extra-oral assessment</h2>
   <div class="card grid">
     <label class="f">Facial type<select data-k="fx.type"><option value="">—</option><option>Mesofacial</option><option>Dolichofacial (long)</option><option>Brachyfacial (short)</option></select></label>
@@ -316,6 +323,7 @@ dialog::backdrop{background:#000a}
   </div>
 
   <h2>Tooth widths, Bolton and space analysis</h2>
+  <div class="card"><div class="row"><button class="btn primary" id="mAuto">✨ Auto-measure teeth</button><button class="btn sm" id="mSwap" title="If the teeth were numbered on the wrong side">⇄ Swap left / right</button><button class="btn sm" id="mPts" aria-pressed="true">Show tooth points</button></div><div id="autoInfo" style="margin-top:8px"></div></div>
   <p class="note">Mesio-distal widths in mm — measure on the 3D model with 📏 and Save, or type them in from calipers.</p>
   <div class="card wrapx" id="widths"></div>
   <div class="card grid">
@@ -327,6 +335,15 @@ dialog::backdrop{background:#000a}
     <label class="f">Lower inter-molar width<input type="number" step="0.1" data-k="arch.imwL"></label>
   </div>
   <div class="card" id="analysisOut"></div>
+  <h2>Extraction planner</h2>
+  <div class="card">
+    <div class="row" style="margin-bottom:8px"><label class="f">Anchorage<select data-k="plan.anchSim"><option value="mod">Moderate</option><option value="min">Minimum (back teeth move forward more)</option><option value="max">Maximum / TADs</option></select></label>
+      <label class="f">Lips<select data-k="plan.lipSim"><option value="average">Average thickness</option><option value="thin">Thin</option><option value="thick">Thick</option></select></label></div>
+    <div id="planner"></div>
+    <div class="row" style="margin-top:10px" id="extViews"><span class="note">Show on the 3D models:</span><button class="btn sm" data-v="before" aria-pressed="true">Before</button><button class="btn sm" data-v="extracted">After extraction</button><button class="btn sm" data-v="closed">After space closure</button></div>
+    <div class="note" id="extNote"></div>
+    <div class="note">Sources for the lip ratios: <a href="https://pubmed.ncbi.nlm.nih.gov/19852663/" target="_blank" rel="noopener">Leonardi et al. 2010 (systematic review)</a> · <a href="https://pubmed.ncbi.nlm.nih.gov/9107377/" target="_blank" rel="noopener">African American females, 1.75 : 1 and 1.2 : 1</a> · <a href="https://www.sciencedirect.com/science/article/abs/pii/S0889540624001495" target="_blank" rel="noopener">thin vs thick lips (adults)</a>.</div>
+  </div>
 </section>
 
 <!-- CEPH -->
@@ -526,7 +543,7 @@ function renderCaseSel(){const s=$('#caseSel');s.innerHTML=cases.sort((a,b)=>(b.
 async function openCase(c){await saveNow();for(const u of urlCache.values())URL.revokeObjectURL(u);urlCache.clear();cur=c;
   for(const k of['photos','fx','models','occ','w','arch'])cur[k]=cur[k]||{};cur.ceph=cur.ceph||{pts:{}};cur.ceph.pts=cur.ceph.pts||{};cur.ceph.auto=cur.ceph.auto||{};cur.ceph.cv=cur.ceph.cv||{};cur.ceph.vert=cur.ceph.vert||{};vertStep=-1;cur.ceph.meas=cur.ceph.meas||[];q3=null;measMode=null;measPts=[];cur.opg=cur.opg||{teeth:{},f:{}};cur.plan=cur.plan||{};cur.plan.sel=cur.plan.sel||[];cur.plan.refs=cur.plan.refs||[];cur.pt.h=cur.pt.h||{};
   try{localStorage.setItem('oa-last',c.id)}catch(e){}
-  renderCaseSel();bindAll();renderPhotos();renderWidths();renderAnalysis();renderBrushes();renderChart();lmIdx=nextMissing(0);fillPopSelect();renderLm();renderCephTable();renderLive(null);renderCvm();updDots();
+  renderCaseSel();bindAll();renderPhotos();renderWidths();renderAnalysis();renderBrushes();renderChart();lmIdx=nextMissing(0);extView='before';fillPopSelect();renderAutoInfo();renderPlanner();renderPred();renderLm();renderCephTable();renderLive(null);renderCvm();updDots();
   cephView.setImage(null);opgView.setImage(null);mesh.clear();
   if(cur.ceph.img){blobURL(cur.ceph.img).then(u=>u&&loadImg(u)).then(i=>{if(i&&c===cur)cephView.setImage(i)}).catch(()=>{})}
   if(cur.opg.img){blobURL(cur.opg.img).then(u=>u&&loadImg(u)).then(i=>{if(i&&c===cur)opgView.setImage(i)}).catch(()=>{})}
@@ -556,7 +573,8 @@ document.addEventListener('input',onField);document.addEventListener('change',on
 function onField(e){const el=e.target;if(!el.dataset||!el.dataset.k||!cur)return;let v=el.type==='checkbox'?el.checked:el.value;if(el.type==='number')v=v===''?'':+v;
   setP(cur,el.dataset.k,v);save();const k=el.dataset.k;
   if(k.startsWith('pt.name')||k.startsWith('pt.file')){const o=$('#caseSel').selectedOptions[0];if(o)o.textContent=caseLabel(cur)}
-  if(/^(w\.|arch\.|occ\.)/.test(k))renderAnalysis();
+  if(/^(w\.|arch\.|occ\.|plan\.(anch|lip)Sim)/.test(k)){renderAnalysis();renderPlanner();renderPred()}
+  if(k==='fx.predScale')renderPred();
   if(k.startsWith('ceph.'))renderCephTable(),cephView.draw(),renderCvm();
   if(k==='pt.sex'){renderPopNote();renderCephTable()}
   if(k==='opg.prim')renderChart();
@@ -565,7 +583,7 @@ function onField(e){const el=e.target;if(!el.dataset||!el.dataset.k||!cur)return
 /* ---------- tabs ---------- */
 let curTab='patient';
 function showTab(t){curTab=t;for(const b of $$('#tabs button'))b.setAttribute('aria-selected',b.dataset.tab===t);for(const s of $$('section.tab'))s.classList.toggle('on',s.id==='tab-'+t);
-  if(t==='models')mesh.resize();if(t==='ceph'){cephView.resize();renderLive(null)}if(t==='opg')opgView.resize();if(t==='plan')renderPlan();if(t==='research')renderResearch();scrollTo(0,0)}
+  if(t==='models'){mesh.resize();renderPlanner()}if(t==='photos')renderPred();if(t==='ceph'){cephView.resize();renderLive(null)}if(t==='opg')opgView.resize();if(t==='plan')renderPlan();if(t==='research')renderResearch();scrollTo(0,0)}
 $('#tabs').onclick=e=>{const b=e.target.closest('button');if(b)showTab(b.dataset.tab)};
 function updDots(){if(!cur)return;const d=$$('#tabs .dot');const has=o=>Object.values(o||{}).some(v=>v!==''&&v!=null&&v!==false&&!(typeof v==='object'&&!Object.keys(v).length));
   d[0].classList.toggle('on',!!(cur.pt.name||cur.pt.cc));d[1].classList.toggle('on',Object.values(cur.photos).some(Boolean));d[2].classList.toggle('on',!!(cur.models.upper||cur.models.lower||has(cur.occ)));
@@ -677,12 +695,12 @@ let phSlot=null;
 $('#slots').onclick=e=>{const s=e.target.closest('.slot');if(!s)return;phSlot=s.dataset.slot;if(cur.photos[phSlot])openPv();else $('#phFile').click()};
 $('#slots').addEventListener('change',async e=>{if(e.target.id!=='phFile')return;const f=e.target.files[0];e.target.value='';if(f)await setPhoto(phSlot,f)});
 async function setPhoto(slot,f){try{const d=await decodeImage(f);await storePhoto(slot,d.blob)}catch(e){toast(f.name+': '+e.message)}}
-async function storePhoto(slot,blob){const old=cur.photos[slot];const k='b:'+uid();await DB.putBlob(k,blob);cur.photos[slot]=k;if(old)await DB.delBlob(old);saveNow();renderPhotos();updDots()}
+async function storePhoto(slot,blob){const old=cur.photos[slot];const k='b:'+uid();await DB.putBlob(k,blob);cur.photos[slot]=k;if(old)await DB.delBlob(old);saveNow();renderPhotos();updDots();if(slot==='ep'){predImg=null;if(cur.fx.pred)cur.fx.pred.pts={};renderPred()}}
 async function openPv(){$('#pvImg').src=await blobURL(cur.photos[phSlot]);$('#pvTitle').textContent=SLOTS.find(s=>s[0]===phSlot)[1];$('#pvDlg').showModal()}
 $('#pvClose').onclick=()=>$('#pvDlg').close();
 $('#pvGrid').onclick=e=>{const on=e.target.getAttribute('aria-pressed')!=='true';e.target.setAttribute('aria-pressed',on);$('#pvBox').classList.toggle('grid',on)};
 $('#pvRep').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(f){await setPhoto(phSlot,f);openPv()}};
-$('#pvDel').onclick=async()=>{const k=cur.photos[phSlot];delete cur.photos[phSlot];await DB.delBlob(k);save();$('#pvDlg').close();renderPhotos();updDots()};
+$('#pvDel').onclick=async()=>{const k=cur.photos[phSlot];delete cur.photos[phSlot];await DB.delBlob(k);save();$('#pvDlg').close();renderPhotos();updDots();if(phSlot==='ep'){predImg=null;renderPred()}};
 
 /* ---------- 2D image viewer (ceph + OPG) ---------- */
 class ImgView{
@@ -924,6 +942,12 @@ $('#cGrid').onclick=e=>{cephView.grid=!cephView.grid;e.target.setAttribute('aria
 try{$('#cInst').checked=localStorage.getItem('oa-instant')==='1'}catch(e){}
 $('#cInst').onchange=e=>{try{localStorage.setItem('oa-instant',e.target.checked?'1':'0')}catch(err){}if(e.target.checked)toast('⚡ Instant on: ✨ Auto-detect will run as soon as a ceph is uploaded')};
 fillAnalysisSelects();
+$('#mAuto').onclick=autoMeasure;$('#mSwap').onclick=swapSides;$('#mPts').onclick=e=>{e.target.setAttribute('aria-pressed',e.target.getAttribute('aria-pressed')!=='true');showToothMarks()};
+$('#extViews').onclick=e=>{const b=e.target.closest('[data-v]');if(b&&!b.disabled)showExtraction(b.dataset.v)};
+$('#predCv').onclick=e=>{if(!predImg)return;const r=e.target.getBoundingClientRect(),pts=((cur.fx.pred=cur.fx.pred||{}).pts=cur.fx.pred.pts||{}),need=PRED_PTS.find(([p])=>!pts[p]);if(!need)return;
+  pts[need[0]]=[(e.clientX-r.left)*predImg.width/r.width,(e.clientY-r.top)*predImg.height/r.height].map(r1);if(!num(cur.fx.predScale)){cur.fx.predScale=defaultScale();$('#predScale').value=cur.fx.predScale}saveNow();renderPred()};
+$('#predSplit').oninput=()=>renderPred();$('#predReset').onclick=()=>{if(cur.fx.pred)cur.fx.pred.pts={};saveNow();renderPred()};
+$('#predSave').onclick=()=>{$('#predCv').toBlob(b=>{if(!b)return;const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=(cur.pt.name||'patient').replace(/[^\w-]+/g,'_')+'-profile-prediction.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000)},'image/png')};
 $('#popSel').onchange=e=>setPop(e.target.value);$('#popLoc').onclick=locate;
 $('#cOutl').onclick=e=>{cephView.outline=cephView.outline===false;e.target.setAttribute('aria-pressed',cephView.outline);cephView.draw()};
 $('#vertBtn').onclick=vertStart;$('#sumBtn').onclick=printSummary;$('#sumBtn2').onclick=()=>{$('#moreDlg').close();printSummary()};
@@ -1107,7 +1131,8 @@ class MeshView{
   proj(p){const v=Rv(this.R,[p[0]-this.t[0],p[1]-this.t[1],p[2]-this.t[2]]);v[2]-=this.d;if(v[2]>=0)return null;const w=this.cv.width,h=this.cv.height,f=Math.tan(this.fov/2),a=w/h;return[((v[0]/-v[2])/(f*a)+1)/2*w,(1-(v[1]/-v[2])/f)/2*h]}
   overlay(){const c=this.oc,d=window.devicePixelRatio||1;c.clearRect(0,0,this.ov.width,this.ov.height);const pts=this.marks.map(p=>this.proj(p));
     c.lineWidth=2*d;c.strokeStyle='#facc15';c.beginPath();pts.forEach((p,i)=>{if(!p)return;i?c.lineTo(p[0],p[1]):c.moveTo(p[0],p[1])});c.stroke();
-    for(const p of pts)if(p){c.fillStyle='#f43f5e';c.beginPath();c.arc(p[0],p[1],4.5*d,0,7);c.fill()}}
+    for(const p of pts)if(p){c.fillStyle='#f43f5e';c.beginPath();c.arc(p[0],p[1],4.5*d,0,7);c.fill()}
+    c.font=`600 ${11*d}px sans-serif`;for(const t of this.tmarks||[]){const q=this.proj(t.p);if(!q)continue;c.fillStyle=t.col;c.beginPath();c.arc(q[0],q[1],3*d,0,7);c.fill();if(t.lab){c.strokeStyle='#000';c.lineWidth=3*d;c.strokeText(t.lab,q[0]+5*d,q[1]-5*d);c.fillStyle='#fff';c.fillText(t.lab,q[0]+5*d,q[1]-5*d)}}}
   pick(cx,cy){const r=this.cv.getBoundingClientRect(),w=r.width,h=r.height,f=Math.tan(this.fov/2),nx=(cx-r.left)/w*2-1,ny=1-(cy-r.top)/h*2;
     const D=RT(this.R,[nx*f*(w/h),ny*f,-1]),O=RT(this.R,[0,0,this.d]).map((v,i)=>v+this.t[i]);let best=Infinity;
     for(const m of Object.values(this.meshes)){if(!m.vis)continue;const P=m.P;for(let i=0;i<P.length;i+=9){const ax=P[i],ay=P[i+1],az=P[i+2],e1x=P[i+3]-ax,e1y=P[i+4]-ay,e1z=P[i+5]-az,e2x=P[i+6]-ax,e2y=P[i+7]-ay,e2z=P[i+8]-az;
@@ -1123,15 +1148,191 @@ class MeshView{
   up(e){if(!this.ptrs.has(e.pointerId))return;this.ptrs.delete(e.pointerId);if(!this.ptrs.size&&!this.moved&&this.btn===0&&this.mode){const p=this.pick(e.clientX,e.clientY);if(p)this.onPick(p);else toast('Tap on the model surface')}}
 }
 const mesh=new MeshView($('#mStage'),$('#mGL'),$('#mOv'));
+/* ---------- automatic model analysis on the 3D scans ---------- */
+const origP={};
+const v3=(a,b,s=1)=>[a[0]+b[0]*s,a[1]+b[1]*s,a[2]+b[2]*s],d3=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],x3=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],n3=a=>{const l=Math.hypot(a[0],a[1],a[2])||1;return[a[0]/l,a[1]/l,a[2]/l]};
+function jacobi3(A){const a=A.map(r=>r.slice()),V=[[1,0,0],[0,1,0],[0,0,1]];for(let it=0;it<60;it++){let p=0,q=1;for(const[i,j]of[[0,1],[0,2],[1,2]])if(Math.abs(a[i][j])>Math.abs(a[p][q])){p=i;q=j}
+  if(Math.abs(a[p][q])<1e-12)break;const th=(a[q][q]-a[p][p])/(2*a[p][q]),t=Math.sign(th||1)/(Math.abs(th)+Math.sqrt(th*th+1)),c=1/Math.sqrt(t*t+1),s=t*c;
+  for(let k=0;k<3;k++){const akp=a[k][p],akq=a[k][q];a[k][p]=c*akp-s*akq;a[k][q]=s*akp+c*akq}for(let k=0;k<3;k++){const apk=a[p][k],aqk=a[q][k];a[p][k]=c*apk-s*aqk;a[q][k]=s*apk+c*aqk}
+  for(let k=0;k<3;k++){const vkp=V[k][p],vkq=V[k][q];V[k][p]=c*vkp-s*vkq;V[k][q]=s*vkp+c*vkq}}
+  return[0,1,2].map(i=>({val:a[i][i],vec:[V[0][i],V[1][i],V[2][i]]})).sort((x,y)=>y.val-x.val)}
+function archFrame(P){const n=P.length/3,st=Math.max(1,Math.floor(n/80000));let c=[0,0,0],k=0;for(let i=0;i<n;i+=st){c[0]+=P[i*3];c[1]+=P[i*3+1];c[2]+=P[i*3+2];k++}c=c.map(x=>x/k);
+  const C=[[0,0,0],[0,0,0],[0,0,0]];for(let i=0;i<n;i+=st){const d=[P[i*3]-c[0],P[i*3+1]-c[1],P[i*3+2]-c[2]];for(let a=0;a<3;a++)for(let b=0;b<3;b++)C[a][b]+=d[a]*d[b]}
+  const E=jacobi3(C);let e2=E[1].vec,e3=E[2].vec;
+  let pos=0,neg=0;for(let i=0;i<P.length;i+=9*Math.max(1,Math.floor(P.length/9/150000))){const nn=x3([P[i+3]-P[i],P[i+4]-P[i+1],P[i+5]-P[i+2]],[P[i+6]-P[i],P[i+7]-P[i+1],P[i+8]-P[i+2]]),ar=Math.hypot(...nn);if(!ar)continue;const cs=d3(nn,e3)/ar;if(cs>0.97)pos+=ar;else if(cs<-0.97)neg+=ar}
+  if(pos>neg*1.3)e3=e3.map(x=>-x);// a flat base faces away from the teeth
+  let e1=x3(e2,e3);let bmin=1e9,bmax=-1e9;const pts=[];for(let i=0;i<n;i+=st*2){const d=[P[i*3]-c[0],P[i*3+1]-c[1],P[i*3+2]-c[2]];const a=d3(d,e1),b=d3(d,e2);pts.push([a,b]);if(b<bmin)bmin=b;if(b>bmax)bmax=b}
+  const band=(lo,hi)=>{let s=0,m=0;for(const[a,b]of pts)if(b>=lo&&b<=hi){s+=Math.abs(a);m++}return m?s/m:0},rg=bmax-bmin;
+  if(band(bmax-0.2*rg,bmax)>band(bmin,bmin+0.2*rg))e2=e2.map(x=>-x);// the narrow, curved end of the U is anterior
+  e1=x3(e2,e3);return{c,e1:n3(e1),e2:n3(e2),e3:n3(e3)}}
+function flipFrame(F){const e3=F.e3.map(x=>-x);return{...F,e3,e1:n3(x3(F.e2,e3))}}
+function rayHit(P,O,D){let best=Infinity;for(let i=0;i<P.length;i+=9){const ax=P[i],ay=P[i+1],az=P[i+2],e1x=P[i+3]-ax,e1y=P[i+4]-ay,e1z=P[i+5]-az,e2x=P[i+6]-ax,e2y=P[i+7]-ay,e2z=P[i+8]-az;
+  const hx=D[1]*e2z-D[2]*e2y,hy=D[2]*e2x-D[0]*e2z,hz=D[0]*e2y-D[1]*e2x,A=e1x*hx+e1y*hy+e1z*hz;if(A>-1e-12&&A<1e-12)continue;const F=1/A,sx=O[0]-ax,sy=O[1]-ay,sz=O[2]-az,u=F*(sx*hx+sy*hy+sz*hz);if(u<0||u>1)continue;
+  const qx=sy*e1z-sz*e1y,qy=sz*e1x-sx*e1z,qz=sx*e1y-sy*e1x,v=F*(D[0]*qx+D[1]*qy+D[2]*qz);if(v<0||u+v>1)continue;const t=F*(e2x*qx+e2y*qy+e2z*qz);if(t>1e-6&&t<best)best=t}return best<Infinity?best:null}
+function orthoShot(P,F,size=1400){let amin=1e9,amax=-1e9,bmin=1e9,bmax=-1e9,hmax=-1e9;const n=P.length/3,st=Math.max(1,Math.floor(n/100000));
+  for(let i=0;i<n;i+=st){const d=[P[i*3]-F.c[0],P[i*3+1]-F.c[1],P[i*3+2]-F.c[2]],a=d3(d,F.e1),b=d3(d,F.e2),h=d3(d,F.e3);if(a<amin)amin=a;if(a>amax)amax=a;if(b<bmin)bmin=b;if(b>bmax)bmax=b;if(h>hmax)hmax=h}
+  const ac=(amin+amax)/2,bc=(bmin+bmax)/2,ext=Math.max(amax-amin,bmax-bmin)*1.08,k=2/ext,H=200,cv=document.createElement('canvas');cv.width=cv.height=size;
+  const gl=cv.getContext('webgl',{preserveDrawingBuffer:true,antialias:true});if(!gl)throw new Error('WebGL is not available');
+  const sh=(t,s)=>{const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);return o},pr=gl.createProgram();
+  gl.attachShader(pr,sh(gl.VERTEX_SHADER,'attribute vec3 p;attribute vec3 n;uniform mat4 M;varying vec3 vn;void main(){vn=n;gl_Position=M*vec4(p,1.0);}'));
+  gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,'precision mediump float;varying vec3 vn;uniform vec3 L;void main(){float d=abs(dot(normalize(vn),L));gl_FragColor=vec4(vec3(0.95,0.9,0.82)*(0.25+0.75*d)+vec3(0.15)*pow(d,20.0),1.0);}'));
+  gl.linkProgram(pr);gl.useProgram(pr);const N=new Float32Array(P.length);for(let i=0;i<P.length;i+=9){const nn=n3(x3([P[i+3]-P[i],P[i+4]-P[i+1],P[i+5]-P[i+2]],[P[i+6]-P[i],P[i+7]-P[i+1],P[i+8]-P[i+2]]));for(let j=0;j<9;j+=3){N[i+j]=nn[0];N[i+j+1]=nn[1];N[i+j+2]=nn[2]}}
+  const buf=(d,loc)=>{const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,d,gl.STATIC_DRAW);const l=gl.getAttribLocation(pr,loc);gl.enableVertexAttribArray(l);gl.vertexAttribPointer(l,3,gl.FLOAT,false,0,0)};buf(P,'p');buf(N,'n');
+  const{e1,e2,e3,c}=F,t0=-k*(d3(c,e1)+ac),t1=-k*(d3(c,e2)+bc),t2=(d3(c,e3)+hmax/2)/H;
+  gl.uniformMatrix4fv(gl.getUniformLocation(pr,'M'),false,new Float32Array([k*e1[0],k*e2[0],-e3[0]/H,0,k*e1[1],k*e2[1],-e3[1]/H,0,k*e1[2],k*e2[2],-e3[2]/H,0,t0,t1,t2,1]));
+  gl.uniform3f(gl.getUniformLocation(pr,'L'),e3[0],e3[1],e3[2]);gl.viewport(0,0,size,size);gl.clearColor(0.08,0.09,0.11,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.drawArrays(gl.TRIANGLES,0,P.length/3);
+  const url=cv.toDataURL('image/jpeg',0.9),mmpp=ext/size;
+  const toWorld=(px,py)=>{const a=(px/size-0.5)*ext+ac,b=(0.5-py/size)*ext+bc,O=v3(v3(v3(c,e1,a),e2,b),e3,hmax+20),D=e3.map(x=>-x),t=rayHit(P,O,D);return t==null?v3(v3(v3(c,e1,a),e2,b),e3,hmax-6):v3(O,D,t)};
+  return{url,size,mmpp,toWorld,toPix:p=>{const d=[p[0]-c[0],p[1]-c[1],p[2]-c[2]];return[(d3(d,e1)-ac)/ext*size+size/2,size/2-(d3(d,e2)-bc)/ext*size]}}}
+const ARCH_TEETH={upper:[17,16,15,14,13,12,11,21,22,23,24,25,26,27],lower:[47,46,45,44,43,42,41,31,32,33,34,35,36,37]};
+const XY={type:'object',properties:{x:{type:'number'},y:{type:'number'}},required:['x','y'],additionalProperties:false};
+async function claudeTeeth(side,shot){const key=lsGet('oa-claude-key'),T=ARCH_TEETH[side],rightOn=side==='upper'?'LEFT':'RIGHT';
+  const schema={type:'object',properties:{is_occlusal_view:{type:'boolean'},teeth:{type:'array',items:{type:'object',properties:{fdi:{type:'integer',enum:T},mesial:XY,distal:XY,cusp:XY,confidence:{type:'string',enum:['high','medium','low']}},required:['fdi','mesial','distal','cusp','confidence'],additionalProperties:false}},note:{type:'string'}},required:['is_occlusal_view','teeth','note'],additionalProperties:false};
+  const prompt=`This is a rendered occlusal view of a digital ${side} dental cast (intra-oral scan), ${shot.size} x ${shot.size} pixels, ${shot.mmpp.toFixed(4)} mm per pixel. Anterior teeth are at the TOP of the image. The patient's RIGHT side is on the image ${rightOn}. Use FDI numbering (${side==='upper'?'upper right 17–11, upper left 21–27':'lower right 47–41, lower left 31–37'}).
+For every tooth you can see, give in image pixels (x from left, y from top):
+- mesial: the mesial contact point — the most mesial point of the crown outline where it touches, or would touch, the neighbouring tooth (the end of the mesiodistal diameter);
+- distal: the distal contact point (other end of the mesiodistal diameter);
+- cusp: incisors — middle of the incisal edge; canines — cusp tip; premolars — buccal cusp tip; molars — mesiobuccal cusp tip.
+Mesial and distal must be the two ends of the tooth's greatest mesiodistal width, measured as the dentist would with calipers. Leave out teeth that are missing. Mark unclear teeth low confidence. Set is_occlusal_view to false if you are looking at the base or the gums instead of the biting surfaces.`;
+  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-beta':'server-side-fallback-2026-07-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:CLAUDE_MODEL,max_tokens:16000,fallbacks:'default',output_config:{effort:'high',format:{type:'json_schema',schema}},messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:'image/jpeg',data:shot.url.split(',')[1]}},{type:'text',text:prompt}]}]})});
+  const res=await r.json().catch(()=>({}));if(r.status===401||r.status===403)throw new Error('your Claude key was not accepted — check it in ⋯ → Claude AI key');if(!r.ok)throw new Error((res.error&&res.error.message)||'Claude AI error '+r.status);
+  if(res.stop_reason==='refusal')throw new Error('Claude AI declined this image');let out;try{out=JSON.parse((res.content||[]).filter(c=>c.type==='text').map(c=>c.text).join(''))}catch(e){throw new Error('Claude AI gave an unreadable answer — try again')}return out}
+function teethMetrics(side,A){const T=A.teeth,g=k=>T[k],c=(k,f)=>T[k]&&T[k][f],F=A.frame,pl=p=>[d3([p[0]-F.c[0],p[1]-F.c[1],p[2]-F.c[2]],F.e1),d3([p[0]-F.c[0],p[1]-F.c[1],p[2]-F.c[2]],F.e2)];
+  const out={w:{}};for(const k in T)out.w[k]=+dist3(T[k].m,T[k].d).toFixed(1);
+  const [cR,cL,mR,mL,i1,i2]=side==='upper'?[13,23,16,26,11,21]:[43,33,46,36,41,31];
+  if(c(cR,'c')&&c(cL,'c'))out.icw=+dist3(T[cR].c,T[cL].c).toFixed(1);if(c(mR,'c')&&c(mL,'c'))out.imw=+dist3(T[mR].c,T[mL].c).toFixed(1);
+  const seq=ARCH_TEETH[side].filter(k=>![17,27,47,37].includes(k));// mesial of first molar to mesial of first molar
+  if(g(mR)&&g(mL)){const nodes=[pl(T[mR].m),...seq.filter(k=>k!==mR&&k!==mL&&g(k)).map(k=>pl(mid3(T[k].m,T[k].d))),pl(T[mL].m)];let s=0;for(let i=1;i<nodes.length;i++)s+=len(sub(nodes[i],nodes[i-1]));out.avail=+s.toFixed(1)}
+  if(side==='lower'&&c(i1,'c')&&c(i2,'c')){const back=[37,47].map(k=>T[k]||T[k-1]).filter(Boolean);if(back.length===2){const a=mid3(T[i1].c,T[i2].c),b=back[0].c,cc=back[1].c,nn=n3(x3([b[0]-a[0],b[1]-a[1],b[2]-a[2]],[cc[0]-a[0],cc[1]-a[1],cc[2]-a[2]]));const nz=d3(nn,F.e3)<0?nn.map(x=>-x):nn;
+    let dep=0;for(const k of[34,35,36,44,45,46])if(T[k]){const p=T[k].c,dd=-d3([p[0]-a[0],p[1]-a[1],p[2]-a[2]],nz);if(dd>dep)dep=dd}out.spee=+dep.toFixed(1)}}
+  return out}
+const mid3=(a,b)=>[(a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2];
+async function autoMeasure(){if(!origP.upper&&!origP.lower)return toast('Upload the upper and/or lower scan first');if(!lsGet('oa-claude-key')&&!(await askKey()))return;
+  if(lsGet('oa-ai-ok3d')!=='1'){if(!confirm('Auto-measure sends a picture of each dental model (no name or other details) from this device to Claude AI (Anthropic). Continue?'))return;lsSet('oa-ai-ok3d','1')}
+  const btn=$('#mAuto');btn.disabled=true;const done=[];cur.models.auto=cur.models.auto||{};
+  try{for(const side of['upper','lower']){if(!origP[side])continue;btn.textContent='✨ Measuring '+side+'…';$('#mHint').hidden=false;$('#mHint').textContent=`Claude AI is measuring the ${side} teeth — about a minute…`;
+      let F=(cur.models.auto[side]&&cur.models.auto[side].frame)||archFrame(origP[side]),shot=orthoShot(origP[side],F),res=await claudeTeeth(side,shot);
+      if(!res.is_occlusal_view){F=flipFrame(F);shot=orthoShot(origP[side],F);res=await claudeTeeth(side,shot)}
+      const teeth={};for(const t of res.teeth||[]){const ok=p=>p&&p.x>=0&&p.y>=0&&p.x<=shot.size&&p.y<=shot.size;if(!ok(t.mesial)||!ok(t.distal))continue;teeth[t.fdi]={m:shot.toWorld(t.mesial.x,t.mesial.y),d:shot.toWorld(t.distal.x,t.distal.y),c:ok(t.cusp)?shot.toWorld(t.cusp.x,t.cusp.y):null,conf:t.confidence}}
+      if(!Object.keys(teeth).length)throw new Error('no teeth were found on the '+side+' model');
+      cur.models.auto[side]={frame:F,teeth,note:res.note||'',at:Date.now()};applyMetrics(side);done.push(`${side}: ${Object.keys(teeth).length} teeth`)}
+    saveNow();toast('Measured '+done.join(', ')+' — check the widths and points; edit any value straight away')}
+  catch(e){toast('Auto-measure failed: '+(e.message==='Failed to fetch'?'could not reach Claude AI':e.message))}
+  finally{btn.disabled=false;btn.textContent='✨ Auto-measure teeth';$('#mHint').hidden=true;showToothMarks();renderAutoInfo();renderPlanner()}}
+function applyMetrics(side){const A=cur.models.auto[side];if(!A)return;const M=teethMetrics(side,A);for(const k in M.w)if((side==='upper'?UW:LW).includes(+k))cur.w[k]=M.w[k];
+  const U=side==='upper';if(M.icw)cur.arch[U?'icwU':'icwL']=M.icw;if(M.imw)cur.arch[U?'imwU':'imwL']=M.imw;if(M.avail)cur.arch[U?'availU':'availL']=M.avail;if(!U&&M.spee!=null)cur.occ.spee=M.spee;
+  A.metrics=M;bindAll();renderWidths();renderAnalysis()}
+function swapSides(){for(const side of['upper','lower']){const A=cur.models.auto&&cur.models.auto[side];if(!A)continue;const sw={};for(const k in A.teeth){const q=Math.floor(k/10),u=k%10,nq={1:2,2:1,3:4,4:3}[q];sw[nq*10+u]=A.teeth[k]}A.teeth=sw;applyMetrics(side)}saveNow();showToothMarks();renderAutoInfo();renderPlanner();toast('Left and right swapped')}
+function showToothMarks(){mesh.tmarks=[];if($('#mPts').getAttribute('aria-pressed')!=='true'||extView!=='before'){mesh.render();return}for(const side of['upper','lower']){const A=cur.models.auto&&cur.models.auto[side];if(!A||!mesh.meshes[side]||!mesh.meshes[side].vis)continue;
+  for(const k in A.teeth){const t=A.teeth[k];mesh.tmarks.push({p:t.m,col:'#22d3ee'},{p:t.d,col:'#22d3ee'});if(t.c)mesh.tmarks.push({p:t.c,col:t.conf==='low'?'#f97316':'#facc15',lab:k})}}mesh.render()}
+function renderAutoInfo(){const A=cur.models.auto||{};const parts=['upper','lower'].filter(s=>A[s]).map(s=>{const M=A[s].metrics||{};return`<div><b>${s==='upper'?'Upper':'Lower'}</b>: ${Object.keys(A[s].teeth).length} teeth measured${M.icw?` · inter-canine ${M.icw} mm`:''}${M.imw?` · inter-molar ${M.imw} mm`:''}${M.avail?` · arch length 6–6 ${M.avail} mm`:''}${M.spee!=null?` · curve of Spee ${M.spee} mm`:''}${A[s].note?`<div class="note">${esc(A[s].note)}</div>`:''}</div>`});
+  $('#autoInfo').innerHTML=parts.length?parts.join('')+'<div class="note">Values are filled into the tables below — type over any of them, or re-measure a tooth with 📏 Distance and Save.</div>':'<span class="note">Press ✨ Auto-measure teeth to fill every tooth width and the arch measurements from the scans.</span>'}
+
+/* ---------- extraction planner ---------- */
+const AVG_W={11:8.5,12:6.6,13:7.6,14:7.0,15:6.6,16:10.2,17:9.3,21:8.5,22:6.6,23:7.6,24:7.0,25:6.6,26:10.2,27:9.3,31:5.3,32:5.8,33:6.7,34:7.0,35:7.2,36:11.0,37:10.4,41:5.3,42:5.8,43:6.7,44:7.0,45:7.2,46:11.0,47:10.4};
+const PATTERNS=[
+  {id:'none',name:'Non-extraction (align; IPR / expansion if needed)',U:[],L:[]},
+  {id:'4s',name:'All four first premolars',U:[14,24],L:[34,44],note:'Most used pattern for moderate–severe crowding and bimaxillary protrusion; maximum incisor retraction.'},
+  {id:'5s',name:'All four second premolars',U:[15,25],L:[35,45],note:'Less incisor retraction and more molar protraction than first premolars; mild–moderate crowding, flat profiles, high angle.'},
+  {id:'U4L5',name:'Upper first + lower second premolars',U:[14,24],L:[35,45],note:'Class II camouflage: lower molars move forward more, helping the molar correction.'},
+  {id:'U5L4',name:'Upper second + lower first premolars',U:[15,25],L:[34,44],note:'Class III camouflage: lower incisors retract more, upper molars move forward.'},
+  {id:'U4',name:'Upper first premolars only',U:[14,24],L:[],note:'Class II div 1 camouflage with an aligned lower arch; finishes Class II molar, Class I canine.'},
+  {id:'L4',name:'Lower first premolars only',U:[],L:[34,44],note:'Class III camouflage, or lower crowding with a good upper arch.'},
+  {id:'L1',name:'One lower incisor',U:[],L:[41],note:'Lower anterior crowding with Bolton anterior excess; Class I or mild Class III.'},
+  {id:'6s',name:'All four first molars',U:[16,26],L:[36,46],note:'Only when first molars are badly broken down; long space closure.'},
+  {id:'U7',name:'Upper second molars (to distalise first molars)',U:[17,27],L:[],note:'Gives room for upper molar distalisation; needs healthy third molars.'}];
+const MOLAR_MM={'Class I':0,'Class II ¼ unit':1.75,'Class II ½ unit':3.5,'Class II ¾ unit':5.25,'Class II full unit':7,'Class III ¼ unit':-1.75,'Class III ½ unit':-3.5,'Class III full unit':-7};
+const LIPK={thin:[0.61,0.98],average:[0.57,0.83],thick:[0.17,0.44]};
+function plannerInputs(c){const sp=spaceCalc(c),o=c.occ||{},M=cephMeasures(c),v=k=>{const m=M.find(x=>x.key===k);return m&&m.v!=null?m.v:null};
+  const crowdU=sp.U?Math.max(0,-sp.U.disc):(num(o.crowdU)||0),crowdL=sp.L?Math.max(0,-sp.L.disc):(num(o.crowdL)||0),oj=num(o.oj)??2.5,spee=num(o.spee)||0;
+  let tweed=0;const fma=v('FMA'),imp=v('IMPA');if(fma!=null&&imp!=null){const tgt=fma<=15?92:180-fma-(fma<=28?68:65);tweed=Math.max(0,(imp-tgt)*0.8)}
+  const mol=[MOLAR_MM[o.molR],MOLAR_MM[o.molL]].filter(x=>x!=null),molStart=mol.length?mol.reduce((a,b)=>a+b,0)/mol.length:null;
+  return{crowdU,crowdL,oj,spee,tweed,molStart,ule:v('ULE'),lle:v('LLE'),tgtOJ:2.5,boltonAnt:sp.ant}}
+function simulate(c,pat,opt){const I=plannerInputs(c),alpha={min:0.4,mod:0.6,max:0.85}[opt.anch]||0.6,kk=LIPK[opt.lips]||LIPK.average;
+  const W=t=>num(c.w[t])??AVG_W[t],usedAvg=[...pat.U,...pat.L].filter(t=>num(c.w[t])==null);
+  const arch=(teeth,crowd,extra)=>{const E=teeth.reduce((s,t)=>s+W(t),0),R=crowd+extra,A=E>0?Math.min(R,alpha*E):0,r=(A-crowd)/2,mm=E>0?(E-A)/2:0;return{E,R,A,r,mm,unres:Math.max(0,R-(E>0?E:0)),anchor:E>0&&R>alpha*E+0.5}};
+  const needU=I.oj>I.tgtOJ?2*(I.oj-I.tgtOJ):0,needL=I.tweed+I.spee+(I.oj<1?2*(1-I.oj):0);
+  const U=arch(pat.U,I.crowdU,needU),L=arch(pat.L,I.crowdL,needL);
+  const ojF=I.oj-U.r+L.r,molF=I.molStart==null?null:I.molStart-(L.mm-U.mm),ul=kk[0]*U.r,ll=kk[1]*L.r;
+  let score=100;score-=15*(U.unres+L.unres);if(U.anchor||L.anchor)score-=8;if(ojF<1||ojF>4)score-=8*Math.min(4,ojF<1?1-ojF:ojF-4);
+  if(molF!=null&&Math.abs(molF)>1.5)score-=(pat.id==='U4'?2:7)*(Math.abs(molF)-1.5);score-=3*(pat.U.length+pat.L.length);if(pat.id==='6s')score-=20;if(pat.id==='U7')score-=10;
+  if(pat.id==='L1'){const b=I.boltonAnt;score+=b&&b.ex.arch==='lower'&&b.ex.mm>1.5?8:-15}
+  if(I.lle!=null){const after=I.lle-ll;if(after<-5)score-=6*(-5-after);if(after>1)score-=4*(after-1)}else if(U.r>3||L.r>3)score-=3;
+  return{pat,U,L,ojF,molF,ul,ll,score:Math.round(score),usedAvg,I}}
+function molLabel(m){if(m==null)return'—';return Math.abs(m)<=1.5?'Class I':m>0?`Class II ${r1(m)} mm`:`Class III ${r1(-m)} mm`}
+function renderPlanner(){if(!cur||!$('#planner'))return;const opt={anch:cur.plan.anchSim||'mod',lips:cur.plan.lipSim||'average'},sims=PATTERNS.map(p=>simulate(cur,p,opt)),best=Math.max(...sims.map(s=>s.score));
+  const sel=cur.plan.extPat||sims.find(s=>s.score===best).pat.id,f=x=>x>0?'−'+r1(x):x<0?'+'+r1(-x):'0';const I=sims[0].I;
+  let h=`<div class="note" style="margin-bottom:6px">Needs used: upper crowding ${r1(I.crowdU)} mm, lower ${r1(I.crowdL)} mm, overjet ${r1(I.oj)} mm → ${I.tgtOJ} mm, lower incisor uprighting (Tweed) ${r1(I.tweed)} mm, curve of Spee ${r1(I.spee)} mm${I.molStart!=null?`, molars ${molLabel(I.molStart)}`:''}. Retraction needs about 2 mm of arch per 1 mm of incisor movement.</div>
+  <div class="wrapx"><table><tr><th></th><th>Pattern</th><th>Upper: space / need</th><th>Lower: space / need</th><th>Incisors U / L</th><th>Molars forward U / L</th><th>Molar finish</th><th>Overjet</th><th>Lips U / L</th><th>Fit</th></tr>`;
+  for(const s of sims){const tag=s.score===best?'<span class="tag t-ok">Best fit</span>':s.score>=best-10?'<span class="tag t-mute">Possible</span>':'';
+    h+=`<tr${s.pat.id===sel?' style="background:var(--soft)"':''}><td><input type="radio" name="extpat" value="${s.pat.id}" ${s.pat.id===sel?'checked':''}></td><td><b>${esc(s.pat.name)}</b>${s.pat.U.length+s.pat.L.length?`<div class="note">${[...s.pat.U,...s.pat.L].join(', ')}${s.usedAvg.length?' · average width used for '+s.usedAvg.join(', '):''}</div>`:''}</td>
+      <td class="n">${r1(s.U.E)} / ${r1(s.U.R)}${s.U.unres>0.5?` <span class="tag t-bad">short ${r1(s.U.unres)}</span>`:''}${s.U.anchor?' <span class="tag t-warn">TADs</span>':''}</td>
+      <td class="n">${r1(s.L.E)} / ${r1(s.L.R)}${s.L.unres>0.5?` <span class="tag t-bad">short ${r1(s.L.unres)}</span>`:''}${s.L.anchor?' <span class="tag t-warn">TADs</span>':''}</td>
+      <td class="n">${f(s.U.r)} / ${f(s.L.r)} mm</td><td class="n">${r1(s.U.mm)} / ${r1(s.L.mm)} mm</td><td>${molLabel(s.molF)}</td><td class="n">${r1(s.ojF)} mm</td><td class="n">${f(s.ul)} / ${f(s.ll)} mm</td><td>${s.score} ${tag}</td></tr>`}
+  h+=`</table></div><div class="note">Incisors and lips: − = retraction, + = forward. Lip change from published lip : incisor ratios for ${esc(opt.lips)} lips (upper ${LIPK[opt.lips][0]}, lower ${LIPK[opt.lips][1]}). The space model is a simplified Tweed–Merrifield-style estimate; confirm with a diagnostic set-up.</div>`;
+  const S=sims.find(s=>s.pat.id===sel);if(S&&S.pat.note)h+=`<div class="card" style="margin:8px 0 0"><b>${esc(S.pat.name)}</b> — ${esc(S.pat.note)}${I.ule!=null||I.lle!=null?`<div class="note">E-line after: upper lip ${I.ule!=null?r1(I.ule-S.ul):'—'} mm, lower lip ${I.lle!=null?r1(I.lle-S.ll):'—'} mm (ideal about −4 / −2).</div>`:''}</div>`;
+  $('#planner').innerHTML=h;updExtButtons()}
+$('#planner').addEventListener('change',e=>{if(e.target.name==='extpat'){cur.plan.extPat=e.target.value;save();renderPlanner();if(extView!=='before')showExtraction(extView);renderPred()}});
+/* ---------- extraction in the 3D scans ---------- */
+let extView='before';
+function archNodes(side){const A=cur.models.auto&&cur.models.auto[side];if(!A)return null;const F=A.frame,pl=p=>{const d=[p[0]-F.c[0],p[1]-F.c[1],p[2]-F.c[2]];return[d3(d,F.e1),d3(d,F.e2),d3(d,F.e3)]};
+  const ns=ARCH_TEETH[side].filter(k=>A.teeth[k]).map(k=>{const t=A.teeth[k],m=pl(t.m),d=pl(t.d),cc=t.c?pl(t.c):pl(mid3(t.m,t.d));return{k,m,d,c:[(m[0]+d[0])/2,(m[1]+d[1])/2],h:cc[2]}});if(ns.length<4)return null;
+  const S=[0];for(let i=1;i<ns.length;i++)S.push(S[i-1]+len(sub(ns[i].c,ns[i-1].c)));return{F,ns,S,pl}}
+function archParam(N,q){let best=1e9,bs=0;for(let i=1;i<N.ns.length;i++){const a=N.ns[i-1].c,b=N.ns[i].c,ab=sub(b,a),L=len(ab)||1;let t=dot(sub(q,a),ab)/(L*L);t=Math.max(0,Math.min(1,t));const pnt=[a[0]+ab[0]*t,a[1]+ab[1]*t],d=len(sub(q,pnt));if(d<best){best=d;bs=N.S[i-1]+t*L}}return{s:bs,d:best}}
+function archPoint(N,s){for(let i=1;i<N.ns.length;i++)if(s<=N.S[i]||i===N.ns.length-1){const a=N.ns[i-1].c,b=N.ns[i].c,t=(s-N.S[i-1])/((N.S[i]-N.S[i-1])||1);return[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]}}
+function deformArch(side,teeth,mode,sim){const P0=origP[side],N=archNodes(side);if(!N||!P0)return null;const F=N.F,ext=N.ns.filter(n=>teeth.includes(n.k));if(!ext.length)return P0;
+  const gaps=ext.map(n=>{const a=archParam(N,[n.m[0],n.m[1]]).s,b=archParam(N,[n.d[0],n.d[1]]).s;return{lo:Math.min(a,b)-0.3,hi:Math.max(a,b)+0.3,h:n.h,k:n.k}}).sort((x,y)=>x.lo-y.lo);
+  const Smid=N.S[N.ns.findIndex(n=>[11,21,41,31].includes(n.k))]??N.S[N.S.length-1]/2,A=side==='upper'?sim.U:sim.L,share=A.E>0?A.A/A.E:0.5;
+  const segs=[];let lo=-1e9;for(const g of gaps){segs.push({lo,hi:g.lo});lo=g.hi}segs.push({lo,hi:1e9});
+  const antIdx=segs.findIndex(s=>s.lo<Smid&&s.hi>Smid&&s.lo>-1e9&&s.hi<1e9),back=[-F.e2[0],-F.e2[1]];
+  const segDisp=(si,s)=>{if(si===antIdx){const g=(gaps[si-1].hi-gaps[si-1].lo+gaps[si].hi-gaps[si].lo)/2;return[back[0]*g*share,back[1]*g*share]}
+    let ds=0;const gw=g=>g.hi-g.lo;if(antIdx<0){if(si<gaps.length)ds+=0.5*gw(gaps[si]);if(si>0)ds-=0.5*gw(gaps[si-1])}else if(si<antIdx)ds+=(1-share)*gw(gaps[si]);else ds-=(1-share)*gw(gaps[si-1]);
+    const p0=archPoint(N,s),p1=archPoint(N,s+ds);return[p1[0]-p0[0],p1[1]-p0[1]]};
+  const out=[];const P=P0;for(let i=0;i<P.length;i+=9){const cx=(P[i]+P[i+3]+P[i+6])/3,cy=(P[i+1]+P[i+4]+P[i+7])/3,cz=(P[i+2]+P[i+5]+P[i+8])/3,q=N.pl([cx,cy,cz]),ap=archParam(N,[q[0],q[1]]);
+    const gi=gaps.findIndex(g=>ap.s>=g.lo&&ap.s<=g.hi);if(gi>=0&&ap.d<7&&q[2]>gaps[gi].h-9)continue;// remove the extracted crown
+    if(mode==='extracted'){for(let j=0;j<9;j++)out.push(P[i+j]);continue}
+    for(let j=0;j<9;j+=3){const vq=N.pl([P[i+j],P[i+j+1],P[i+j+2]]),vp=archParam(N,[vq[0],vq[1]]),fade=Math.max(0,Math.min(1,1-(vp.d-8)/6));if(fade<=0){out.push(P[i+j],P[i+j+1],P[i+j+2]);continue}
+      let si=segs.findIndex(sg=>vp.s>sg.lo&&vp.s<=sg.hi),D;if(si<0){const g2=gaps.findIndex(g=>vp.s>=g.lo&&vp.s<=g.hi),g=gaps[g2],t=(vp.s-g.lo)/((g.hi-g.lo)||1),a=segDisp(g2,g.lo),b=segDisp(g2+1,g.hi);D=[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]}else D=segDisp(si,vp.s);
+      const w=[(F.e1[0]*D[0]+F.e2[0]*D[1])*fade,(F.e1[1]*D[0]+F.e2[1]*D[1])*fade,(F.e1[2]*D[0]+F.e2[2]*D[1])*fade];out.push(P[i+j]+w[0],P[i+j+1]+w[1],P[i+j+2]+w[2])}}
+  return new Float32Array(out)}
+function showExtraction(mode){extView=mode;for(const b of $$('#extViews button'))b.setAttribute('aria-pressed',b.dataset.v===mode);
+  const pat=PATTERNS.find(p=>p.id===(cur.plan.extPat||'4s'))||PATTERNS[1],sim=simulate(cur,pat,{anch:cur.plan.anchSim||'mod',lips:cur.plan.lipSim||'average'});let miss=[];
+  for(const side of['upper','lower']){if(!origP[side])continue;const teeth=side==='upper'?pat.U:pat.L;if(mode==='before'||!teeth.length){mesh.set(side,origP[side],COLORS[side]);continue}
+    const P=deformArch(side,teeth,mode,sim);if(!P){miss.push(side);mesh.set(side,origP[side],COLORS[side]);continue}mesh.set(side,P,COLORS[side])}
+  showToothMarks();$('#extNote').textContent=miss.length?'Run ✨ Auto-measure teeth first so the teeth can be located on the '+miss.join(' and ')+' model.':mode==='before'?'':mode==='extracted'?`${pat.name}: crowns removed (${[...pat.U,...pat.L].join(', ')}).`:`${pat.name}: spaces closed — anterior teeth take about ${Math.round(100*(sim.U.E?sim.U.A/sim.U.E:sim.L.E?sim.L.A/sim.L.E:0.5))}% of the space, back teeth move forward for the rest. Illustration, not a set-up.`}
+function updExtButtons(){const ok=!!(cur.models.auto&&(cur.models.auto.upper||cur.models.auto.lower));for(const b of $$('#extViews button'))b.disabled=!ok&&b.dataset.v!=='before'}
+/* ---------- profile photo prediction ---------- */
+const PRED_PTS=[['Prn','Nose tip'],['Sn','Subnasale (under the nose)'],['Ls','Upper lip — most forward point'],['St','Stomion — where the lips meet'],['Li','Lower lip — most forward point'],['Sm','Labiomental fold (deepest point under the lower lip)'],['PogS','Soft-tissue chin — most forward point']];
+let predImg=null,predTap=-1;
+async function renderPred(){if(!cur||!$('#predCv'))return;const k=cur.photos.ep;if(!k){$('#predInfo').innerHTML='Add the profile photo (Face – profile) above to see the predicted profile.';const c=$('#predCv');c.width=c.height=0;return}
+  if(!predImg||predImg.key!==k){try{predImg=await loadImg(await blobURL(k));predImg.key=k}catch(e){return}}
+  const pts=(cur.fx.pred||{}).pts||{},need=PRED_PTS.filter(([p])=>!pts[p]);
+  const pat=PATTERNS.find(p=>p.id===cur.plan.extPat)||PATTERNS[1],sim=simulate(cur,pat,{anch:cur.plan.anchSim||'mod',lips:cur.plan.lipSim||'average'});
+  $('#predInfo').innerHTML=`Prediction for <b>${esc(pat.name)}</b>: upper lip ${sim.ul>=0?'back':'forward'} ${r1(Math.abs(sim.ul))} mm, lower lip ${sim.ll>=0?'back':'forward'} ${r1(Math.abs(sim.ll))} mm. ${need.length?`<b>Tap ${need.length} point${need.length>1?'s':''} on the photo:</b> start with ${esc(need[0][1])}.`:'Drag the slider to compare.'}`;
+  drawPred(sim,pts)}
+function drawPred(sim,pts){const im=predImg,cv=$('#predCv'),W=Math.min(1100,im.width),H=Math.round(im.height*W/im.width);cv.width=W;cv.height=H;const x=cv.getContext('2d');x.drawImage(im,0,0,W,H);const sc=W/im.width;
+  const P=Object.fromEntries(Object.entries(pts).map(([k,v])=>[k,[v[0]*sc,v[1]*sc]]));const ready=PRED_PTS.every(([p])=>P[p]),split=+$('#predSplit').value;
+  if(ready){const before=x.getImageData(0,0,W,H),after=x.createImageData(W,H),mmS=num(cur.fx.predScale)||defaultScale();const pxmm=len(sub(P.Sn,P.PogS))/mmS,face=Math.sign(P.Prn[0]-P.Sn[0])||1;
+    const ctrl=[['Sn',0.1*sim.ul],['Ls',sim.ul],['St',(sim.ul+sim.ll)/2],['Li',sim.ll],['Sm',0.35*sim.ll],['PogS',0],['Prn',0]].map(([k,mm])=>({c:P[k],dx:-face*mm*pxmm}));
+    const sig=Math.max(6,0.42*len(sub(P.Sn,P.Ls))),s2=2*sig*sig,b=before.data,o=after.data;o.set(b);
+    const x0=Math.max(0,Math.floor(Math.min(...ctrl.map(c=>c.c[0]))-3*sig)),x1=Math.min(W-1,Math.ceil(Math.max(...ctrl.map(c=>c.c[0]))+3*sig)),y0=Math.max(0,Math.floor(P.Sn[1]-2*sig)),y1=Math.min(H-1,Math.ceil(P.PogS[1]+2*sig));
+    for(let yy=y0;yy<=y1;yy++)for(let xx=x0;xx<=x1;xx++){let sx=0,sw=0.12;for(const c of ctrl){const dx=xx-c.c[0],dy=yy-c.c[1],w=Math.exp(-(dx*dx+dy*dy)/s2);sx+=c.dx*w;sw+=w}sx/=Math.max(1,sw);if(Math.abs(sx)<0.05)continue;// weighted average: each point moves by its own amount
+      const fx=xx-sx,ix=Math.floor(fx),t=fx-ix;if(ix<0||ix>=W-1)continue;const a=(yy*W+ix)*4,bb=a+4,oo=(yy*W+xx)*4;for(let ch=0;ch<4;ch++)o[oo+ch]=b[a+ch]*(1-t)+b[bb+ch]*t}
+    x.putImageData(after,0,0);x.putImageData(before,0,0,0,0,Math.round(W*split/100),H);x.strokeStyle='#fff';x.lineWidth=2;x.beginPath();x.moveTo(W*split/100,0);x.lineTo(W*split/100,H);x.stroke();
+    x.font='bold 15px sans-serif';x.fillStyle='#fff';x.strokeStyle='#000';x.lineWidth=3;x.strokeText('Before',8,22);x.fillText('Before',8,22);x.strokeText('After',W-60,22);x.fillText('After',W-60,22)}
+  for(const[k]of PRED_PTS)if(P[k]&&(!ready||P[k][0]<W*split/100-5)){x.fillStyle='#22d3ee';x.beginPath();x.arc(P[k][0],P[k][1],4,0,7);x.fill()}}
+function defaultScale(){const p=cur.ceph.pts,mm=num(cur.ceph.mmpp);return p&&p.Sn&&p.PogS&&mm?+(len(sub(p.Sn,p.PogS))*mm).toFixed(1):62}
+
 if(mesh.fail)$('#mEmpty').textContent='This browser cannot show 3D (WebGL is off).';
 const COLORS={upper:[0.93,0.86,0.72],lower:[0.78,0.84,0.93]};
 async function loadModel(side,file){try{$('#mEmpty').hidden=true;$('#mHint').hidden=false;$('#mHint').textContent='Loading '+side+' model…';
   let buf,name;if(file){buf=await file.arrayBuffer();name=file.name}else{const b=await DB.getBlob(cur.models[side].key);if(!b)throw new Error('File missing');buf=await b.arrayBuffer();name=cur.models[side].name}
   const P=parseModel(name,buf);if(file){const old=cur.models[side]&&cur.models[side].key;const k='b:'+uid();await DB.putBlob(k,file);cur.models[side]={key:k,name,tris:P.length/9};if(old)await DB.delBlob(old);save();updDots()}
-  mesh.set(side,P,COLORS[side]);$('#mHint').hidden=true;updMeshInfo()}catch(err){$('#mHint').hidden=true;toast('Could not open model: '+err.message);if(!Object.keys(mesh.meshes).length)$('#mEmpty').hidden=false}}
+  origP[side]=P;mesh.set(side,P,COLORS[side]);$('#mHint').hidden=true;updMeshInfo();updExtButtons();showToothMarks()}catch(err){$('#mHint').hidden=true;toast('Could not open model: '+err.message);if(!Object.keys(mesh.meshes).length)$('#mEmpty').hidden=false}}
 function updMeshInfo(){const m=cur.models;$('#mEmpty').hidden=!mesh.fail&&!!(m.upper||m.lower);
   $('#mInfo').innerHTML=['upper','lower'].map(s=>`<div><b>${s==='upper'?'Upper':'Lower'}:</b> ${m[s]?esc(m[s].name)+' <span class="muted">('+(m[s].tris||0).toLocaleString()+' triangles)</span> <button class="btn sm danger" data-rm="'+s+'">Remove</button>':'not loaded'}</div>`).join('')}
-$('#mInfo').onclick=async e=>{const s=e.target.dataset.rm;if(!s)return;await DB.delBlob(cur.models[s].key);delete cur.models[s];mesh.remove(s);mesh.render();save();updMeshInfo();updDots()};
+$('#mInfo').onclick=async e=>{const s=e.target.dataset.rm;if(!s)return;await DB.delBlob(cur.models[s].key);delete cur.models[s];delete origP[s];if(cur.models.auto)delete cur.models.auto[s];mesh.remove(s);mesh.render();save();updMeshInfo();updDots()};
 $('#upU').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)addModels([f],'upper')};
 $('#upL').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)addModels([f],'lower')};
 for(const[id,s]of[['tglU','upper'],['tglL','lower']])$('#'+id).onclick=e=>{const m=mesh.meshes[s];if(!m)return;m.vis=!m.vis;e.target.setAttribute('aria-pressed',m.vis);mesh.render()};
