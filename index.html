@@ -344,7 +344,7 @@ dialog::backdrop{background:#000a}
     <div class="row" style="margin-bottom:8px"><label class="f">Anchorage<select data-k="plan.anchSim"><option value="mod">Moderate</option><option value="min">Minimum (back teeth move forward more)</option><option value="max">Maximum / TADs</option></select></label>
       <label class="f">Lips<select data-k="plan.lipSim"><option value="average">Average thickness</option><option value="thin">Thin</option><option value="thick">Thick</option></select></label></div>
     <div id="planner"></div>
-    <div class="row" style="margin-top:10px" id="extViews"><span class="note">Show on the 3D models:</span><button class="btn sm" data-v="before" aria-pressed="true">Before</button><button class="btn sm" data-v="extracted">After extraction</button><button class="btn sm" data-v="setup">Final set-up (aligned)</button></div>
+    <div class="row" style="margin-top:10px" id="extViews"><span class="note">Show on the 3D models:</span><button class="btn sm" data-v="before" aria-pressed="true">Before</button><button class="btn sm" data-v="extracted">After extraction</button><button class="btn sm" data-v="seg">Segmentation</button><button class="btn sm" data-v="setup">Final set-up (aligned)</button></div>
     <div class="note" id="extNote"></div>
     <div class="note">Sources for the lip ratios: <a href="https://pubmed.ncbi.nlm.nih.gov/19852663/" target="_blank" rel="noopener">Leonardi et al. 2010 (systematic review)</a> · <a href="https://pubmed.ncbi.nlm.nih.gov/9107377/" target="_blank" rel="noopener">African American females, 1.75 : 1 and 1.2 : 1</a> · <a href="https://www.sciencedirect.com/science/article/abs/pii/S0889540624001495" target="_blank" rel="noopener">thin vs thick lips (adults)</a>.</div>
   </div>
@@ -1303,6 +1303,7 @@ async function autoMeasure(){if(!origP.upper&&!origP.lower)return toast('Upload 
       const teeth={};for(const t of res.teeth||[]){const ok=p=>p&&p.x>=0&&p.y>=0&&p.x<=shot.size&&p.y<=shot.size;if(!ok(t.mesial)||!ok(t.distal))continue;const c=ok(t.cusp)?shot.toWorld(t.cusp.x,t.cusp.y):null,H=q=>d3(v3(q,F.c,-1),F.e3),lvl=q=>c?v3(q,F.e3,H(c)-1-H(q)):q;// contacts sit at marginal-ridge level, about 1 mm below the cusp — a ray that slips down the side of the crown is pulled back up
         teeth[t.fdi]={m:lvl(shot.toWorld(t.mesial.x,t.mesial.y)),d:lvl(shot.toWorld(t.distal.x,t.distal.y)),c,conf:t.confidence}}
       if(!Object.keys(teeth).length)throw new Error('no teeth were found on the '+side+' model');
+      {const P=origP[side],st=Math.max(1,Math.floor(P.length/3/50000));let sv=0,nv=0;for(let i=0;i<P.length;i+=3*st){sv+=(P[i]-F.c[0])*F.e3[0]+(P[i+1]-F.c[1])*F.e3[1]+(P[i+2]-F.c[2])*F.e3[2];nv++}const cs=Object.values(teeth).filter(t=>t.c).map(t=>d3(v3(t.c,F.c,-1),F.e3));if(cs.length&&cs.reduce((a,b)=>a+b,0)/cs.length<sv/nv)F=flipFrame(F)}
       cur.models.auto[side]={frame:F,teeth,note:res.note||'',at:Date.now()};applyMetrics(side);done.push(`${side}: ${Object.keys(teeth).length} teeth`)}
     saveNow();toast('Measured '+done.join(', ')+' — check the widths and points; edit any value straight away')}
   catch(e){toast('Auto-measure failed: '+(e.message==='Failed to fetch'?'could not reach Claude AI':e.message))}
@@ -1368,21 +1369,7 @@ function archNodes(side){const A=cur.models.auto&&cur.models.auto[side];if(!A)re
   const S=[0];for(let i=1;i<ns.length;i++)S.push(S[i-1]+len(sub(ns[i].c,ns[i-1].c)));return{F,ns,S,pl}}
 function archParam(N,q){let best=1e9,bs=0;for(let i=1;i<N.ns.length;i++){const a=N.ns[i-1].c,b=N.ns[i].c,ab=sub(b,a),L=len(ab)||1;let t=dot(sub(q,a),ab)/(L*L);t=Math.max(0,Math.min(1,t));const pnt=[a[0]+ab[0]*t,a[1]+ab[1]*t],d=len(sub(q,pnt));if(d<best){best=d;bs=N.S[i-1]+t*L}}return{s:bs,d:best}}
 function archPoint(N,s){for(let i=1;i<N.ns.length;i++)if(s<=N.S[i]||i===N.ns.length-1){const a=N.ns[i-1].c,b=N.ns[i].c,t=(s-N.S[i-1])/((N.S[i]-N.S[i-1])||1);return[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]}}
-function deformArch(side,teeth,mode,sim){const P0=origP[side],N=archNodes(side);if(!N||!P0)return null;const F=N.F,ext=N.ns.filter(n=>teeth.includes(n.k));if(!ext.length)return P0;
-  const gaps=ext.map(n=>{const a=archParam(N,[n.m[0],n.m[1]]).s,b=archParam(N,[n.d[0],n.d[1]]).s;return{lo:Math.min(a,b)-0.3,hi:Math.max(a,b)+0.3,h:n.h,k:n.k}}).sort((x,y)=>x.lo-y.lo);
-  const Smid=N.S[N.ns.findIndex(n=>[11,21,41,31].includes(n.k))]??N.S[N.S.length-1]/2,A=side==='upper'?sim.U:sim.L,share=A.E>0?A.A/A.E:0.5;
-  const segs=[];let lo=-1e9;for(const g of gaps){segs.push({lo,hi:g.lo});lo=g.hi}segs.push({lo,hi:1e9});
-  const antIdx=segs.findIndex(s=>s.lo<Smid&&s.hi>Smid&&s.lo>-1e9&&s.hi<1e9),back=[-F.e2[0],-F.e2[1]];
-  const segDisp=(si,s)=>{if(si===antIdx){const g=(gaps[si-1].hi-gaps[si-1].lo+gaps[si].hi-gaps[si].lo)/2;return[back[0]*g*share,back[1]*g*share]}
-    let ds=0;const gw=g=>g.hi-g.lo;if(antIdx<0){if(si<gaps.length)ds+=0.5*gw(gaps[si]);if(si>0)ds-=0.5*gw(gaps[si-1])}else if(si<antIdx)ds+=(1-share)*gw(gaps[si]);else ds-=(1-share)*gw(gaps[si-1]);
-    const p0=archPoint(N,s),p1=archPoint(N,s+ds);return[p1[0]-p0[0],p1[1]-p0[1]]};
-  const out=[];const P=P0;for(let i=0;i<P.length;i+=9){const cx=(P[i]+P[i+3]+P[i+6])/3,cy=(P[i+1]+P[i+4]+P[i+7])/3,cz=(P[i+2]+P[i+5]+P[i+8])/3,q=N.pl([cx,cy,cz]),ap=archParam(N,[q[0],q[1]]);
-    const gi=gaps.findIndex(g=>ap.s>=g.lo&&ap.s<=g.hi);if(gi>=0&&ap.d<7&&q[2]>gaps[gi].h-9)continue;// remove the extracted crown
-    if(mode==='extracted'){for(let j=0;j<9;j++)out.push(P[i+j]);continue}
-    for(let j=0;j<9;j+=3){const vq=N.pl([P[i+j],P[i+j+1],P[i+j+2]]),vp=archParam(N,[vq[0],vq[1]]),fade=Math.max(0,Math.min(1,1-(vp.d-8)/6));if(fade<=0){out.push(P[i+j],P[i+j+1],P[i+j+2]);continue}
-      let si=segs.findIndex(sg=>vp.s>sg.lo&&vp.s<=sg.hi),D;if(si<0){const g2=gaps.findIndex(g=>vp.s>=g.lo&&vp.s<=g.hi),g=gaps[g2],t=(vp.s-g.lo)/((g.hi-g.lo)||1),a=segDisp(g2,g.lo),b=segDisp(g2+1,g.hi);D=[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]}else D=segDisp(si,vp.s);
-      const w=[(F.e1[0]*D[0]+F.e2[0]*D[1])*fade,(F.e1[1]*D[0]+F.e2[1]*D[1])*fade,(F.e1[2]*D[0]+F.e2[2]*D[1])*fade];out.push(P[i+j]+w[0],P[i+j+1]+w[1],P[i+j+2]+w[2])}}
-  return new Float32Array(out)}
+function deformArch(side,teeth){const P=origP[side],L=segmentArch(side);if(!P||!L)return null;const out=[];for(let t=0;t<L.length;t++)if(!teeth.includes(L[t]))for(let j=0;j<9;j++)out.push(P[t*9+j]);return new Float32Array(out)}
 /* ---------- digital set-up: crowns segmented and placed on an ideal arch with proper overjet, overbite, tip and torque ----------
    Crown angulation (tip) and inclination (torque) targets: Andrews LF, "The six keys to normal occlusion", Am J Orthod 1972 (anterior teeth). */
 const ANDREWS={11:[5,7],12:[9,3],13:[11,-7],21:[5,7],22:[9,3],23:[11,-7],41:[2,-1],42:[2,-1],43:[5,-11],31:[2,-1],32:[2,-1],33:[5,-11]};
@@ -1393,12 +1380,45 @@ const mm3=(A,B)=>{const o=[];for(let i=0;i<3;i++)for(let j=0;j<3;j++)o[i*3+j]=A[
 function basisR(x1,z1,x2,z2){// rotation taking frame (x1, z1) onto frame (x2, z2)
   const ortho=(x,z)=>{const X=n3(x),Z=n3(v3(z,X,-d3(z,X))),Y=x3(Z,X);return[X,Y,Z]},[a,b,c]=ortho(x1,z1),[A,B,C]=ortho(x2,z2);
   const M=[];for(let i=0;i<3;i++)for(let j=0;j<3;j++)M[i*3+j]=A[i]*a[j]+B[i]*b[j]+C[i]*c[j];return M}
-function crownTris(side){// which triangles belong to which tooth crown (own arch frame)
-  const N=archNodes(side),P=origP[side];if(!N||!P)return null;const out={};
-  const iv=N.ns.map(n=>{const a=archParam(N,[n.m[0],n.m[1]]).s,b=archParam(N,[n.d[0],n.d[1]]).s;return{k:n.k,lo:Math.min(a,b),hi:Math.max(a,b),h:n.h,ant:[1,2,3].includes(n.k%10)}});
-  for(let i=0;i<P.length;i+=9){const q=N.pl([(P[i]+P[i+3]+P[i+6])/3,(P[i+1]+P[i+4]+P[i+7])/3,(P[i+2]+P[i+5]+P[i+8])/3]),ap=archParam(N,[q[0],q[1]]);if(ap.d>7.5)continue;
-    let best=null,bd=1e9;for(const t of iv){const dd=ap.s<t.lo?t.lo-ap.s:ap.s>t.hi?ap.s-t.hi:0;if(dd<bd){bd=dd;best=t}}if(!best||bd>0.6)continue;if(q[2]<best.h-(best.ant?10.5:8))continue;(out[best.k]=out[best.k]||[]).push(i)}
-  return out}
+/* ---------- tooth segmentation: curvature-aware region growing from each tooth (like dental CAD) ----------
+   The scan is welded into one surface; every tooth grows from its cusp and crown centre and the gum grows from below.
+   Crossing a concave crease (between teeth, or at the gum line) costs much more, so the borders settle in those grooves. */
+const segCache={},SEGP={lat:7,k:40,deep:11,guard:4};
+function weldMesh(P){const map=new Map(),V=[],T=new Int32Array(P.length/3),q=v=>Math.round(v*2000);
+  for(let i=0;i<P.length;i+=3){const key=q(P[i])+'|'+q(P[i+1])+'|'+q(P[i+2]);let id=map.get(key);if(id===undefined){id=V.length/3;map.set(key,id);V.push(P[i],P[i+1],P[i+2])}T[i/3]=id}
+  return{V:new Float32Array(V),T,n:V.length/3}}
+function segmentArch(side){const A=cur.models.auto&&cur.models.auto[side],P=origP[side];if(!A||!P)return null;const key=A.at+':'+P.length;if(segCache[side]&&segCache[side].key===key)return segCache[side].lab;
+  const{V,T,n}=weldMesh(P),nt=T.length/3;let F=A.frame;{let sv=0,sc=0,nc=0;for(let i=0;i<V.length;i+=3)sv+=(V[i]-F.c[0])*F.e3[0]+(V[i+1]-F.c[1])*F.e3[1]+(V[i+2]-F.c[2])*F.e3[2];for(const k in A.teeth){const c=A.teeth[k].c;if(c){sc+=d3(v3(c,F.c,-1),F.e3);nc++}}if(nc&&sc/nc<sv/(V.length/3))F=flipFrame(F)}
+  // vertex normals (area weighted) and adjacency (compressed rows)
+  const N=new Float32Array(n*3),deg=new Int32Array(n+1);
+  for(let t=0;t<nt;t++){const a=T[t*3],b=T[t*3+1],c=T[t*3+2],ax=V[b*3]-V[a*3],ay=V[b*3+1]-V[a*3+1],az=V[b*3+2]-V[a*3+2],bx=V[c*3]-V[a*3],by=V[c*3+1]-V[a*3+1],bz=V[c*3+2]-V[a*3+2],nx=ay*bz-az*by,ny=az*bx-ax*bz,nz=ax*by-ay*bx;
+    for(const v of[a,b,c]){N[v*3]+=nx;N[v*3+1]+=ny;N[v*3+2]+=nz}deg[a]+=2;deg[b]+=2;deg[c]+=2}
+  for(let v=0;v<n;v++){const l=Math.hypot(N[v*3],N[v*3+1],N[v*3+2])||1;N[v*3]/=l;N[v*3+1]/=l;N[v*3+2]/=l}
+  const start=new Int32Array(n+1);for(let v=0;v<n;v++)start[v+1]=start[v]+deg[v];const fill=start.slice(0,n),adj=new Int32Array(start[n]);
+  for(let t=0;t<nt;t++){const a=T[t*3],b=T[t*3+1],c=T[t*3+2];adj[fill[a]++]=b;adj[fill[a]++]=c;adj[fill[b]++]=a;adj[fill[b]++]=c;adj[fill[c]++]=a;adj[fill[c]++]=b}
+  // seeds
+  const Nd=archNodes(side),H=i=>(V[i*3]-F.c[0])*F.e3[0]+(V[i*3+1]-F.c[1])*F.e3[1]+(V[i*3+2]-F.c[2])*F.e3[2];
+  const near=p=>{let bi=0,bd=1e18;for(let i=0;i<n;i++){const dx=V[i*3]-p[0],dy=V[i*3+1]-p[1],dz=V[i*3+2]-p[2],d=dx*dx+dy*dy+dz*dz;if(d<bd){bd=d;bi=i}}return bi};
+  const lab=new Int32Array(n).fill(-1),cost=new Float64Array(n).fill(Infinity),heap=[],push=(c,v)=>{heap.push([c,v]);let i=heap.length-1;while(i>0){const p=(i-1)>>1;if(heap[p][0]<=heap[i][0])break;[heap[p],heap[i]]=[heap[i],heap[p]];i=p}},
+    pop=()=>{const top=heap[0],last=heap.pop();if(heap.length){heap[0]=last;let i=0;for(;;){const l=2*i+1,r=l+1;let m=i;if(l<heap.length&&heap[l][0]<heap[m][0])m=l;if(r<heap.length&&heap[r][0]<heap[m][0])m=r;if(m===i)break;[heap[m],heap[i]]=[heap[i],heap[m]];i=m}}return top};
+  const seed=(v,L)=>{if(cost[v]>0){cost[v]=0;lab[v]=L;push(0,v)}};let hmin=1e9;const hc={};
+  for(const k in A.teeth){const t=A.teeth[k];if(!t.c)continue;hc[k]=d3(v3(t.c,F.c,-1),F.e3);hmin=Math.min(hmin,hc[k]);seed(near(t.c),+k);seed(near(v3(mid3(t.m,t.d),F.e3,-1)),+k)}
+  const hs=Object.values(hc).sort((a,b)=>a-b),hmed=hs[Math.floor(hs.length/2)];
+  for(let i=0;i<n;i++){const h=H(i);let gum=h<hmin-SEGP.deep;if(!gum&&Nd&&h<hmed-SEGP.guard){const q=Nd.pl([V[i*3],V[i*3+1],V[i*3+2]]);gum=archParam(Nd,[q[0],q[1]]).d>SEGP.lat}if(gum)seed(i,0)}
+  // grow: edge cost = length × (1 + 40 × concavity)
+  while(heap.length){const[c0,v]=pop();if(c0>cost[v])continue;const px=V[v*3],py=V[v*3+1],pz=V[v*3+2],nx=N[v*3],ny=N[v*3+1],nz=N[v*3+2];
+    for(let e=start[v];e<start[v+1];e++){const w=adj[e],dx=V[w*3]-px,dy=V[w*3+1]-py,dz=V[w*3+2]-pz,L2=dx*dx+dy*dy+dz*dz;if(!L2)continue;const L=Math.sqrt(L2),
+      kap=((N[w*3]-nx)*dx+(N[w*3+1]-ny)*dy+(N[w*3+2]-nz)*dz)/L2,c=c0+L*(1+SEGP.k*Math.max(0,-kap)*L);if(c<cost[w]){cost[w]=c;lab[w]=lab[v];push(c,w)}}}
+  for(let i=0;i<n;i++)if(lab[i]>0&&H(i)<hc[lab[i]]-12.5)lab[i]=0;// no crown goes deeper than a crown can be
+  const out=new Int32Array(nt);for(let t=0;t<nt;t++){const a=lab[T[t*3]],b=lab[T[t*3+1]],c=lab[T[t*3+2]];out[t]=a===b||a===c?a:b===c?b:0}
+  segCache[side]={key,lab:out};return out}
+const SEG_COLORS=[[0.95,0.55,0.55],[0.55,0.8,0.95],[0.6,0.9,0.6],[0.95,0.85,0.5],[0.8,0.6,0.95],[0.5,0.9,0.85],[0.95,0.7,0.45]];
+function clearSeg(){for(const k of Object.keys(mesh.meshes))if(k.startsWith('seg'))mesh.remove(k)}
+function showSegmentation(){let any=false;for(const side of['upper','lower']){if(!origP[side])continue;const L=segmentArch(side);if(!L){mesh.set(side,origP[side],COLORS[side]);continue}any=true;
+  const P=origP[side],parts={};for(let t=0;t<L.length;t++)(parts[L[t]]=parts[L[t]]||[]).push(t);mesh.remove(side);
+  for(const k in parts){const a=new Float32Array(parts[k].length*9);parts[k].forEach((t,i)=>a.set(P.subarray(t*9,t*9+9),i*9));mesh.set('seg'+side+k,a,+k?SEG_COLORS[(+k)%SEG_COLORS.length]:[0.55,0.45,0.48])}}return any}
+
+function crownTris(side){const L=segmentArch(side);if(!L)return null;const out={};for(let t=0;t<L.length;t++)if(L[t]>0)(out[L[t]]=out[L[t]]||[]).push(t*9);return out}
 function solveArch(sumC,sumM,icw,imw){// y = -D (t/Xm)^p, t = distance from the midline; fit arc lengths to the canine and the first molar
   const Xm=imw/2,xc=icw/2,arc=(D,p,T)=>{let s=0,px=0,py=0;const n=60;for(let i=1;i<=n;i++){const t=T*i/n,y=-D*Math.pow(t/Xm,p);s+=Math.hypot(t-px,y-py);px=t;py=y}return s};
   let best=null;for(let p=1.55;p<=2.8;p+=0.05)for(let D=8;D<=45;D+=0.25){const e=0.5*(arc(D,p,xc)-sumC)**2+(arc(D,p,Xm)-sumM)**2;if(!best||e<best.e)best={D,p,e}}return{...best,Xm}}// p limited to clinical arch forms (tapered to ovoid), never V-shaped
@@ -1446,13 +1466,14 @@ function buildSetup(pat,sim){const A=cur.models.auto||{},sides=['lower','upper']
       if(u3&&l3){const dy=u3.cusp[1]-l3.dis[1];res.notes.push(`${nm} canines ${Math.abs(dy)<=1?'Class I':dy>0?'Class II by '+r1(dy)+' mm':'Class III by '+r1(-dy)+' mm'}`)}}}
   return res}
 
-function showExtraction(mode){extView=mode;for(const b of $$('#extViews button'))b.setAttribute('aria-pressed',b.dataset.v===mode);
+function showExtraction(mode){extView=mode;for(const b of $$('#extViews button'))b.setAttribute('aria-pressed',b.dataset.v===mode);clearSeg();
+  if(mode==='seg'){$('#mHint').hidden=false;$('#mHint').textContent='Finding each tooth…';setTimeout(()=>{const ok=showSegmentation();$('#mHint').hidden=true;showToothMarks();$('#extNote').textContent=ok?'Each tooth in its own colour, gum in dark pink. If a crown is cut or includes gum, re-measure that tooth (its points steer the segmentation).':'Run ✨ Auto-measure teeth first.'},30);return}
   const pat=PATTERNS.find(p=>p.id===(cur.plan.extPat||'4s'))||PATTERNS[1],sim=simulate(cur,pat,{anch:cur.plan.anchSim||'mod',lips:cur.plan.lipSim||'average'});let miss=[];
   if(mode==='setup'){const S=buildSetup(pat,sim);if(!S){$('#extNote').textContent='Run ✨ Auto-measure teeth first so each tooth can be found on the models.';return}
     for(const side of['upper','lower']){if(!origP[side])continue;if(S.meshes[side]&&S.meshes[side].length)mesh.set(side,S.meshes[side],COLORS[side]);else mesh.set(side,origP[side],COLORS[side])}showToothMarks();
     const ar=S.arch;$('#extNote').innerHTML=ar?`<b>Final set-up — ${esc(pat.name)}</b>: every crown placed on an ideal arch (keeps inter-canine ${r1(ar.icw)} mm and inter-molar ${r1(ar.imw)} mm), curve of Spee levelled, incisors ${ar.move>0?r1(ar.move)+' mm back':ar.move<0?r1(-ar.move)+' mm forward':'in place'}${S.upper&&S.lower?`, overjet ${SETUP.oj} mm, overbite ${SETUP.ob} mm, upper buccal cusps ${SETUP.buccalOJ} mm outside the lowers`:''}; front teeth tip and torque set to Andrews' norms. ${S.notes.length?'Result: '+esc(S.notes.join(' · '))+'.':''}<div class="note">Crowns only (gums hidden). A planning illustration from the measured widths — check against a lab or software set-up before treatment.</div>`:esc(S.notes.join(' '));return}
   for(const side of['upper','lower']){if(!origP[side])continue;const teeth=side==='upper'?pat.U:pat.L;if(mode==='before'||!teeth.length){mesh.set(side,origP[side],COLORS[side]);continue}
-    const P=deformArch(side,teeth,mode,sim);if(!P){miss.push(side);mesh.set(side,origP[side],COLORS[side]);continue}mesh.set(side,P,COLORS[side])}
+    const P=deformArch(side,teeth);if(!P){miss.push(side);mesh.set(side,origP[side],COLORS[side]);continue}mesh.set(side,P,COLORS[side])}
   showToothMarks();$('#extNote').textContent=miss.length?'Run ✨ Auto-measure teeth first so the teeth can be located on the '+miss.join(' and ')+' model.':mode==='before'?'':`${pat.name}: crowns removed (${[...pat.U,...pat.L].join(', ')}).`}
 function updExtButtons(){const ok=!!(cur.models.auto&&(cur.models.auto.upper||cur.models.auto.lower));for(const b of $$('#extViews button'))b.disabled=!ok&&b.dataset.v!=='before'}
 /* ---------- profile photo prediction ---------- */
@@ -1482,7 +1503,7 @@ const COLORS={upper:[0.93,0.86,0.72],lower:[0.78,0.84,0.93]};
 async function loadModel(side,file){try{$('#mEmpty').hidden=true;$('#mHint').hidden=false;$('#mHint').textContent='Loading '+side+' model…';
   let buf,name;if(file){buf=await file.arrayBuffer();name=file.name}else{const b=await DB.getBlob(cur.models[side].key);if(!b)throw new Error('File missing');buf=await b.arrayBuffer();name=cur.models[side].name}
   const P=parseModel(name,buf);if(file){const old=cur.models[side]&&cur.models[side].key;const k='b:'+uid();await DB.putBlob(k,file);cur.models[side]={key:k,name,tris:P.length/9};if(old)await DB.delBlob(old);save();updDots()}
-  origP[side]=P;mesh.set(side,P,COLORS[side]);$('#mHint').hidden=true;updMeshInfo();updExtButtons();showToothMarks()}catch(err){$('#mHint').hidden=true;toast('Could not open model: '+err.message);if(!Object.keys(mesh.meshes).length)$('#mEmpty').hidden=false}}
+  origP[side]=P;delete segCache[side];mesh.set(side,P,COLORS[side]);$('#mHint').hidden=true;updMeshInfo();updExtButtons();showToothMarks()}catch(err){$('#mHint').hidden=true;toast('Could not open model: '+err.message);if(!Object.keys(mesh.meshes).length)$('#mEmpty').hidden=false}}
 function updMeshInfo(){const m=cur.models;$('#mEmpty').hidden=!mesh.fail&&!!(m.upper||m.lower);
   $('#mInfo').innerHTML=['upper','lower'].map(s=>`<div><b>${s==='upper'?'Upper':'Lower'}:</b> ${m[s]?esc(m[s].name)+' <span class="muted">('+(m[s].tris||0).toLocaleString()+' triangles)</span> <button class="btn sm danger" data-rm="'+s+'">Remove</button>':'not loaded'}</div>`).join('')}
 $('#mInfo').onclick=async e=>{const s=e.target.dataset.rm;if(!s)return;await DB.delBlob(cur.models[s].key);delete cur.models[s];delete origP[s];if(cur.models.auto)delete cur.models.auto[s];mesh.remove(s);mesh.render();save();updMeshInfo();updDots()};
