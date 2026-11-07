@@ -191,6 +191,9 @@ dialog::backdrop{background:#000a}
     <label class="f">Date of birth<input type="date" data-k="pt.dob"></label>
     <label class="f">Age (if no DOB)<input type="number" step="0.5" data-k="pt.age"></label>
     <label class="f">Date of records<input type="date" data-k="pt.recDate"></label>
+    <div class="f span2" style="display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--mute)">Patient's population (ceph norms)
+      <div class="row"><select id="popSel" class="btn" style="flex:1;text-align:left"></select><button class="btn sm" id="popLoc" type="button" title="Suggest from this device's location">📍 From location</button></div>
+      <span class="note" id="popNote"></span></div>
     <label class="f span2">Chief complaint<textarea data-k="pt.cc" placeholder="In the patient's words"></textarea></label>
     <label class="f span2">Medical history<textarea data-k="pt.med"></textarea></label>
     <label class="f span2">Dental history<textarea data-k="pt.dent" placeholder="Previous orthodontics, trauma, extractions…"></textarea></label>
@@ -523,7 +526,7 @@ function renderCaseSel(){const s=$('#caseSel');s.innerHTML=cases.sort((a,b)=>(b.
 async function openCase(c){await saveNow();for(const u of urlCache.values())URL.revokeObjectURL(u);urlCache.clear();cur=c;
   for(const k of['photos','fx','models','occ','w','arch'])cur[k]=cur[k]||{};cur.ceph=cur.ceph||{pts:{}};cur.ceph.pts=cur.ceph.pts||{};cur.ceph.auto=cur.ceph.auto||{};cur.ceph.cv=cur.ceph.cv||{};cur.ceph.vert=cur.ceph.vert||{};vertStep=-1;cur.ceph.meas=cur.ceph.meas||[];q3=null;measMode=null;measPts=[];cur.opg=cur.opg||{teeth:{},f:{}};cur.plan=cur.plan||{};cur.plan.sel=cur.plan.sel||[];cur.plan.refs=cur.plan.refs||[];cur.pt.h=cur.pt.h||{};
   try{localStorage.setItem('oa-last',c.id)}catch(e){}
-  renderCaseSel();bindAll();renderPhotos();renderWidths();renderAnalysis();renderBrushes();renderChart();lmIdx=nextMissing(0);renderLm();renderCephTable();renderLive(null);renderCvm();updDots();
+  renderCaseSel();bindAll();renderPhotos();renderWidths();renderAnalysis();renderBrushes();renderChart();lmIdx=nextMissing(0);fillPopSelect();renderLm();renderCephTable();renderLive(null);renderCvm();updDots();
   cephView.setImage(null);opgView.setImage(null);mesh.clear();
   if(cur.ceph.img){blobURL(cur.ceph.img).then(u=>u&&loadImg(u)).then(i=>{if(i&&c===cur)cephView.setImage(i)}).catch(()=>{})}
   if(cur.opg.img){blobURL(cur.opg.img).then(u=>u&&loadImg(u)).then(i=>{if(i&&c===cur)opgView.setImage(i)}).catch(()=>{})}
@@ -555,6 +558,7 @@ function onField(e){const el=e.target;if(!el.dataset||!el.dataset.k||!cur)return
   if(k.startsWith('pt.name')||k.startsWith('pt.file')){const o=$('#caseSel').selectedOptions[0];if(o)o.textContent=caseLabel(cur)}
   if(/^(w\.|arch\.|occ\.)/.test(k))renderAnalysis();
   if(k.startsWith('ceph.'))renderCephTable(),cephView.draw(),renderCvm();
+  if(k==='pt.sex'){renderPopNote();renderCephTable()}
   if(k==='opg.prim')renderChart();
   updDots()}
 
@@ -800,8 +804,39 @@ function cephMeasures(c){
   add('Burstone / COGS','cGoPg','Mandibular body Go-Pg',['Go','Pog'],()=>len(sub(p.Pog,p.Go)),'mm',X(83.7,74.3),X(4.6,5.8),'Short mandibular body','Long mandibular body');
   add('Burstone / COGS','cArGoGn','Gonial angle Ar-Go-Gn',['Ar','Go','Gn'],()=>at('Ar','Go','Gn'),'°',X(119.1,122),X(6.5,6.9),'Horizontal growth','Vertical growth');
   add('Burstone / COGS','cBPg','Chin prominence B-Pg ∥ MP',['B','Pog','Go','Me'],()=>Math.abs(dot(sub(p.Pog,p.B),nrm(sub(p.Me,p.Go)))),'mm',X(8.9,7.2),X(1.7,1.9),'Flat chin','Prominent chin');
+  {const PN=POPS[popOf(c)].norms;for(const m of out){const nn=pickNorm(PN[m.key],sex);if(nn){m.norm=r1(nn[0]*100)/100;m.sd=nn[1];m.popSrc=popOf(c)}}}
   for(const m of out)if(m.v!=null){const z=(m.v-m.norm)/m.sd;m.z=z;m.st=Math.abs(z)<=1?'ok':Math.abs(z)<=2?'warn':'bad';m.txt=Math.abs(z)<=1?'Within normal':z>0?m.hi:m.lo}
   return out}
+/* ---------- population norms from published studies (values copied from each paper's tables) ----------
+   [norm,sd] for both sexes, [male,sd,female,sd] or [male,sd,female,sd,all,sd] */
+const POPS={
+  std:{name:'Standard (Caucasian) norms',src:'Classic norms of each analysis (Steiner, Downs, Tweed, McNamara, Jarabak, Ricketts, Holdaway).',norms:{}},
+  india_bihar:{name:'Indian — Bihar adults',country:['IN'],src:'Jha MS. Cephalometric evaluation based on Steiner\'s analysis on adults of Bihar. J Pharm Bioallied Sci 2021. doi:10.4103/jpbs.jpbs_172_21 (60 adults, balanced profiles).',
+    norms:{SNA:[86.3,5.3,83.02,4.5,83,4.7],SNB:[82.3,3.2,80.12,3.9,81,3.7],ANB:[3.9,2.7,2.55,1.7,2.7,1.6],SNMP:[31.2,4.1,30.6,4.1,30.1,5.9],U1NAa:[22.2,5.4,25.29,7.4,24.3,7.1],U1NAm:[4.7,1.5,5,1.8,4.7,2.5],
+      L1NBa:[29.4,5.09,30.5,6.6,30.3,6],L1NBm:[5.9,1.9,6.01,1.8,5.9,2.1],PogNB:[0.8,1.3,0.7,0.8,0.7,1],II:[123.8,7.9,122.5,8.1,121,8]}},
+  african_american:{name:'African American adults',src:'Kim LEH, Jeong J, Setzer FC, Chung CH, Jeon HH. Cephalometric norms for African Americans with normal occlusion in the Greater Philadelphia region. J Orofac Orthop 2025;87(5):477. doi:10.1007/s00056-025-00598-7.',
+    norms:{SNA:[84.6,3.6],SNB:[81.0,3.2],ANB:[3.7,2.0],U1NAa:[28.8,7.0],U1NAm:[7.7,2.6],L1NBa:[38.0,7.2],L1NBm:[10.4,2.6],II:[109.5,10.3],SNMP:[32.0,6.4],PogNB:[-1.2,2.0],FMA:[25.2,5.6],FMIA:[52.3,7.0],IMPA:[102.5,8.4],
+      FacAng:[89.8,2.7],NAPog:[8.9,5.1],ABpl:[-4.8,3.0],Yax:[58.8,3.4],OPFH:[5.8,3.6],U1APog:[11.2,2.6],L1APog:[8.5,2.3],Saddle:[127.2,6.0],Artic:[144.7,8.4],Gon:[122.7,7.6],Bjork:[394.6,6.5],Jar:[64.3,5.6],U1SN:[113.4,6.8],ULE:[0.4,3.0],LLE:[4.4,3.6]}},
+  lebanese:{name:'Lebanese adults',country:['LB'],src:'Saadeh M, Haddad R, Haydar M, Ayoub F. Cephalometric hard and soft tissue norms in Lebanese adults. Cureus 2025. doi:10.7759/cureus.85437 (adults with balanced profiles and normal occlusion; by sex).',
+    norms:{SNA:[81.39,4.15,81.28,3.24],SNB:[79.39,3.99,79.18,3.31],ANB:[2.00,1.27,2.10,1.14],Wits:[-1.23,2.55,-1.24,2.39],NAPog:[2.40,3.34,2.16,2.96],LAFHmm:[65.57,6.25,58.41,5.04],LAFH:[57.46,2.38,55.80,2.32],
+      PPMP:[25.51,5.39,24.50,5.12],SNPP:[8.72,3.96,9.35,3.69],FMA:[25.16,5.15,24.58,4.74],Yax:[59.16,2.88,58.07,2.90],CoGn:[114.57,7.50,107.36,6.84],CoA:[83.55,5.53,79.98,4.83],Saddle:[124.43,5.55,125.30,5.47],
+      U1NAm:[4.35,1.92,4.16,2.01],U1NAa:[23.91,5.97,23.14,5.68],U1SN:[105.29,7.10,104.42,6.42],U1PP:[114.03,6.35,113.77,6.92],L1APog:[2.53,2.10,2.02,2.14],L1NBa:[24.31,5.86,24.96,6.14],L1NBm:[4.41,1.98,3.99,2.06],
+      IMPA:[90.68,6.98,91.93,6.89],II:[129.77,9.72,129.81,10.26],ULE:[-4.87,1.81,-5.12,1.64],LLE:[-2.29,1.84,-2.79,1.74],NLA:[109.03,12.05,109.15,8.84],H:[13.45,3.18,12.71,2.83]}},
+  saudi:{name:'Saudi adults (Jarabak only)',country:['SA'],src:'Alshahrani I, Kamran MA, Alhaizaey A, Abumelha N. Evaluation of skeletal variations and establishment of cephalometric norms in Saudi sub population using Bjork Jarabak\'s analysis. Pak J Med Sci 2018;34(5):1104. doi:10.12669/pjms.345.15556 (by sex).',
+    norms:{Saddle:[125.65,5.163,125.842,6.661],Artic:[139.806,6.302,139.328,7.916],Gon:[130.412,6.413,130.182,4.134],Bjork:[395.932,4.604,397.302,4.504],Jar:[65.04,3,64.28,3]}}};
+function popOf(c){const k=c&&c.pt&&c.pt.pop;return POPS[k]?k:'std'}
+function fillPopSelect(){$('#popSel').innerHTML=Object.entries(POPS).map(([k,p])=>`<option value="${k}">${esc(p.name)}</option>`).join('');$('#popSel').value=cur?popOf(cur):'std';renderPopNote()}
+function renderPopNote(){if(!cur)return;const P=POPS[popOf(cur)],n=Object.keys(P.norms).length;$('#popNote').textContent=popOf(cur)==='std'?P.src:`${n} measurements use this population's published norms${cur.pt.sex?'':' (sex not set — combined/average values used)'}; others keep the standard norms. Source: ${P.src}`}
+// rough country boxes for the location helper (lat/lon); the device location is the clinic, not necessarily the patient's origin
+const GEO=[['IN',6,36,68,98],['LB',33,34.7,35.1,36.7],['SA',16,32.2,34.5,55.7]];
+function locate(){if(!navigator.geolocation)return toast('This browser cannot share its location — choose the population yourself');toast('Finding this device\'s location…');
+  navigator.geolocation.getCurrentPosition(pos=>{const{latitude:la,longitude:lo}=pos.coords,hit=GEO.find(([,a,b,c,d])=>la>=a&&la<=b&&lo>=c&&lo<=d);
+    const k=hit&&Object.keys(POPS).find(k=>(POPS[k].country||[]).includes(hit[0]));
+    if(!k)return toast('No published norms in the app for this location yet — choose the patient\'s population, or add regional norms on the ceph tab');
+    setPop(k);toast(`Suggested ${POPS[k].name} from this device's location — change it if the patient comes from elsewhere`)},
+    ()=>toast('Location not available — choose the population yourself'),{timeout:10000,maximumAge:3600000})}
+function setPop(k){cur.pt.pop=k;$('#popSel').value=k;saveNow();renderPopNote();renderCephTable();renderLive(null);if(curTab==='plan')renderPlan()}
+
 /* analysis presets: which measurements, in what order, with which norms ([norm,sd] or [male,sd,female,sd]) */
 const ANALYSES={
   all:{name:'All measurements',keys:null,grp:'ceph'},
@@ -823,10 +858,10 @@ function saveMyAnalyses(a){try{localStorage.setItem('oa-my-analyses',JSON.string
 function getAnalysis(k){if(ANALYSES[k])return ANALYSES[k];const m=myAnalyses().find(x=>x.id===k);return m||null}
 function curAnalysis(){let k=null;try{k=localStorage.getItem('oa-analysis')}catch(e){}return getAnalysis(k)?k:'all'}
 function curAn(){return getAnalysis(curAnalysis())}
-function pickNorm(nn,sex){if(!nn)return null;if(nn.length<4)return nn;return sex==='F'?[nn[2],nn[3]]:sex==='M'?[nn[0],nn[1]]:[(nn[0]+nn[2])/2,Math.max(nn[1],nn[3])]}
+function pickNorm(nn,sex){if(!nn)return null;if(nn.length<4)return nn;if(!sex&&nn.length>=6)return[nn[4],nn[5]];return sex==='F'?[nn[2],nn[3]]:sex==='M'?[nn[0],nn[1]]:[(nn[0]+nn[2])/2,Math.max(nn[1],nn[3])]}
 function analysisView(M,key=curAnalysis()){const A=getAnalysis(key)||ANALYSES.all;if(!A.keys)return M;const by=Object.fromEntries(M.map(m=>[m.key,m])),sex=cur&&cur.pt.sex;
-  return A.keys.map(k=>by[k]).filter(Boolean).map(m0=>{const m={...m0};const nn=pickNorm(A.norms&&A.norms[m.key],sex);if(A.names&&A.names[m.key])m.name=A.names[m.key];
-    if(nn){m.norm=r1(nn[0]*100)/100;m.sd=nn[1];if(m.v!=null){const z=(m.v-m.norm)/m.sd;m.z=z;m.st=Math.abs(z)<=1?'ok':Math.abs(z)<=2?'warn':'bad';m.txt=Math.abs(z)<=1?'Within normal':z>0?m.hi:m.lo}}return m})}
+  return A.keys.map(k=>by[k]).filter(Boolean).map(m0=>{const m={...m0};const nn=m.popSrc&&A.grp!=='regional'?null:pickNorm(A.norms&&A.norms[m.key],sex);if(A.names&&A.names[m.key])m.name=A.names[m.key];
+    if(nn){m.norm=r1(nn[0]*100)/100;m.sd=nn[1];delete m.popSrc;if(m.v!=null){const z=(m.v-m.norm)/m.sd;m.z=z;m.st=Math.abs(z)<=1?'ok':Math.abs(z)<=2?'warn':'bad';m.txt=Math.abs(z)<=1?'Within normal':z>0?m.hi:m.lo}}return m})}
 function fillAnalysisSelects(){const k=curAnalysis(),my=myAnalyses(),opt=(v,n)=>`<option value="${esc(v)}" ${v===k?'selected':''}>${esc(n)}</option>`;
   const o=`<optgroup label="Custom">${my.filter(a=>a.grp==='custom').map(a=>opt(a.id,a.name)).join('')}<option value="+custom">＋ New custom composite…</option></optgroup>
     <optgroup label="Cephalometric">${Object.entries(ANALYSES).map(([v,a])=>opt(v,a.name)).join('')}</optgroup>
@@ -889,6 +924,7 @@ $('#cGrid').onclick=e=>{cephView.grid=!cephView.grid;e.target.setAttribute('aria
 try{$('#cInst').checked=localStorage.getItem('oa-instant')==='1'}catch(e){}
 $('#cInst').onchange=e=>{try{localStorage.setItem('oa-instant',e.target.checked?'1':'0')}catch(err){}if(e.target.checked)toast('⚡ Instant on: ✨ Auto-detect will run as soon as a ceph is uploaded')};
 fillAnalysisSelects();
+$('#popSel').onchange=e=>setPop(e.target.value);$('#popLoc').onclick=locate;
 $('#cOutl').onclick=e=>{cephView.outline=cephView.outline===false;e.target.setAttribute('aria-pressed',cephView.outline);cephView.draw()};
 $('#vertBtn').onclick=vertStart;$('#sumBtn').onclick=printSummary;$('#sumBtn2').onclick=()=>{$('#moreDlg').close();printSummary()};
 /* ---------- ceph measuring: ruler, angle, live values, magnifier ---------- */
@@ -940,9 +976,9 @@ $('#cTrace').onclick=e=>{cephView.trace=cephView.trace===false;e.target.setAttri
 $('#cCal').onclick=e=>{if(!cephView.img)return toast('Upload the ceph first');if(measMode)setMeasMode(measMode);q3=null;$('#cQ3').setAttribute('aria-pressed',false);calMode=!calMode;calPts=[];e.target.setAttribute('aria-pressed',calMode);renderLm();cephView.draw()};
 $('#upCeph').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(f)await setXray('ceph',f,cephView)};
 function tagFor(m){return m.v==null?`<span class="tag t-mute">${esc(m.why)}</span>`:`<span class="tag t-${m.st}">${esc(m.txt)}</span>`}
-function renderCephTable(){if(!cur)return;const M=analysisView(cephMeasures(cur));const an=curAn();$('#analNote').textContent=(an.keys?an.name+(an.grp==='custom'?' (custom). ':an.grp==='regional'?' (regional norms). ':' analysis. '):'')+(an.note?an.note+' ':'')+'Millimetre values need calibration. Norms are for adult Caucasian samples — adjust for ethnicity and age.';let g='',h='<table><tr><th>Measurement</th><th style="text-align:right">Value</th><th style="text-align:right">Norm</th><th>Interpretation</th></tr>';
+function renderCephTable(){if(!cur)return;const M=analysisView(cephMeasures(cur));const an=curAn();$('#analNote').textContent=(an.keys?an.name+(an.grp==='custom'?' (custom). ':an.grp==='regional'?' (regional norms). ':' analysis. '):'')+(an.note?an.note+' ':'')+(popOf(cur)!=='std'?'Population norms: '+POPS[popOf(cur)].name+' (marked “pop”; other values use the standard norms). Millimetre values need calibration.':'Millimetre values need calibration. Standard norms are for adult Caucasian samples — choose the patient\'s population on the Patient tab.');let g='',h='<table><tr><th>Measurement</th><th style="text-align:right">Value</th><th style="text-align:right">Norm</th><th>Interpretation</th></tr>';
   for(const m of M){if(m.g!==g){g=m.g;h+=`<tr><td colspan="4" style="font-weight:700;padding-top:12px">${esc(g)}</td></tr>`}
-    h+=`<tr><td>${esc(m.name)}</td><td class="n">${m.v==null?'—':r1(m.v)+' '+m.unit}</td><td class="n muted">${m.norm} ± ${m.sd}</td><td>${tagFor(m)}</td></tr>`}
+    h+=`<tr><td>${esc(m.name)}</td><td class="n">${m.v==null?'—':r1(m.v)+' '+m.unit}</td><td class="n muted">${m.norm} ± ${m.sd}${m.popSrc?' <span class="tag t-mute" title="'+esc(POPS[m.popSrc].name)+'">pop</span>':''}</td><td>${tagFor(m)}</td></tr>`}
   $('#cephTable').innerHTML=h+'</table>';if(typeof renderLive==='function'&&cur.ceph.meas)renderLive(null)}
 
 /* ---------- automatic landmarks ---------- */
@@ -1210,7 +1246,7 @@ function summarySheet(){const a=analyze(cur),pt=cur.pt,I=cephInterp(cur),mat=mat
     <h2>Problem list</h2><ol>${a.P.slice(0,8).map(p=>`<li>${esc(p)}</li>`).join('')||'<li>None recorded</li>'}</ol>
     ${mat?`<h2>Skeletal maturity</h2><p>${esc(mat.cs)} · CVMI ${esc(mat.cvmi)} · skeletal age ${esc(mat.ageTxt)} · ${esc(mat.rem)} growth left</p>`:''}
   </div><div>
-    ${vals.length?`<h2>Key values — ${esc(an.keys?an.name:'main')}</h2><table>${vals.map(m=>`<tr><td>${esc(m.name)}</td><td class="n">${r1(m.v)}${m.unit==='°'?'°':' '+m.unit}</td><td class="n">${m.norm}±${m.sd}</td><td>${st(m)}</td></tr>`).join('')}</table>`:''}
+    ${vals.length?`<h2>Key values — ${esc(an.keys?an.name:'main')}${popOf(cur)!=='std'?' · '+esc(POPS[popOf(cur)].name)+' norms':''}</h2><table>${vals.map(m=>`<tr><td>${esc(m.name)}</td><td class="n">${r1(m.v)}${m.unit==='°'?'°':' '+m.unit}</td><td class="n">${m.norm}±${m.sd}</td><td>${st(m)}</td></tr>`).join('')}</table>`:''}
     ${img?`<h2>Tracing</h2>${img}`:''}
   </div></div>
   <h2>Treatment plan</h2><div class="plan">${plan.replace(/\n/g,'<br>')}</div>${facts.length?`<p>${esc(facts.join(' · '))}</p>`:''}
@@ -1528,7 +1564,7 @@ $('#qOut').onclick=e=>{const i=e.target.dataset.save;if(i==null)return;const x=l
 /* ---------- printable report ---------- */
 $('#printBtn').onclick=async()=>{const a=analyze(cur),pt=cur.pt;let h=`<h1>Orthodontic assessment — ${esc(pt.name||'')}</h1><div>${esc([pt.file&&'File '+pt.file,a.A!=null&&a.A+' years',pt.sex&&(pt.sex==='F'?'Female':'Male'),pt.recDate&&'Records '+pt.recDate].filter(Boolean).join(' · '))}</div>`;
   if(pt.cc)h+=`<p><b>Chief complaint:</b> ${esc(pt.cc)}</p>`;h+=`<h2>Diagnosis</h2><p>${esc(a.summary)}</p><ul>${a.F.map(f=>`<li>${esc(f.a)}: ${esc(f.t)}</li>`).join('')}</ul><h2>Orthodontist's cephalometric interpretation</h2>${interpHTML(cephInterp(cur))}<h2>Problem list</h2><ol>${a.P.map(p=>`<li>${esc(p)}</li>`).join('')}</ol>`;
-  const M=analysisView(a.M).filter(m=>m.v!=null);if(M.length)h+=`<h2>Cephalometric values — ${esc(curAn().name)}</h2><table><tr><th>Measure</th><th>Value</th><th>Norm</th><th></th></tr>${M.map(m=>`<tr><td>${esc(m.name)}</td><td>${r1(m.v)} ${m.unit}</td><td>${m.norm} ± ${m.sd}</td><td>${esc(m.txt)}</td></tr>`).join('')}</table>`;
+  const M=analysisView(a.M).filter(m=>m.v!=null);if(M.length)h+=`<h2>Cephalometric values — ${esc(curAn().name)}${popOf(cur)!=='std'?' · '+esc(POPS[popOf(cur)].name)+' norms':''}</h2>${popOf(cur)!=='std'?'<p style="font-size:10px">Norm source: '+esc(POPS[popOf(cur)].src)+'</p>':''}<table><tr><th>Measure</th><th>Value</th><th>Norm</th><th></th></tr>${M.map(m=>`<tr><td>${esc(m.name)}</td><td>${r1(m.v)} ${m.unit}</td><td>${m.norm} ± ${m.sd}</td><td>${esc(m.txt)}</td></tr>`).join('')}</table>`;
   const RM=(cur.ceph.meas||[]).map(measLabel);if(RM.length)h+=`<h2>Measurements on the ceph</h2><ol>${RM.map(t=>`<li>${esc(t)}</li>`).join('')}</ol>`;
   if(cephView.img){try{h+=`<h2>Ceph tracing</h2><img src="${$('#cCv').toDataURL('image/jpeg',0.85)}">`}catch(e){}}
   const sel=a.O.filter(o=>cur.plan.sel.includes(o.id));h+=`<h2>Treatment plan</h2>`+(cur.plan.text?`<pre style="white-space:pre-wrap;font:inherit">${esc(cur.plan.text)}</pre>`:sel.map(o=>`<div class="opt"><b>${esc(o.title)}</b><ul>${o.steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ul></div>`).join('')||'<p>Not yet chosen.</p>');
