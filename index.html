@@ -377,10 +377,25 @@ dialog::backdrop{background:#000a}
     <button class="btn sm" id="cMag" aria-pressed="true" title="Zoom circle while you place or drag a point">🔍 Magnifier</button>
     <button class="btn sm" id="cFit">Fit</button>
     <button class="btn sm" id="cEdit" title="Crop / rotate — landmarks move with the picture">✂️ Edit</button>
+    <button class="btn sm" id="cSim" aria-pressed="false" title="Camouflage treatment simulation: move the incisors, see the lips follow">🎯 Simulate</button>
   </div>
   <div class="split">
     <div class="stage" id="cStage"><canvas id="cCv"></canvas><div class="empty" id="cEmpty">Upload or drop a lateral ceph — DICOM (.dcm), JPEG, PNG, TIFF, HEIC or PDF.<br>Then press ✨ Auto-detect, or tap each landmark in turn. Drag any point to adjust it.</div><div class="hint" id="cHint" hidden></div></div>
     <div class="side"><div class="live" id="liveVals"></div><div class="lmlist" id="lmList"></div></div>
+  </div>
+  <div class="card" id="simCard" hidden style="margin-top:10px">
+    <div class="row"><b>Treatment simulation — camouflage</b><span class="note">Drag the orange incisors: the edge dot tips the tooth, the ring moves the whole tooth, the root dot changes the root (torque).</span></div>
+    <div class="row" style="margin-top:8px"><span id="simBA"><button class="btn sm" data-v="before" aria-pressed="false">Before</button><button class="btn sm" data-v="after" aria-pressed="true">After</button></span>
+      <label class="note"><input type="checkbox" id="simShowB" checked> Show before (dashed)</label>
+      <label class="note"><input type="checkbox" id="simEditST"> Edit soft tissue (drag the pink points)</label></div>
+    <div class="grid" style="margin-top:8px">
+      <label class="f">Upper lip : U1 retraction<select id="simUL"></select></label>
+      <label class="f">Lower lip : retraction<select id="simLL"></select></label>
+      <label class="f">Lower lip follows<select id="simLLf"><option value="L1">Lower incisor (L1)</option><option value="U1">Upper incisor (lip trapped behind U1)</option></select></label>
+      <label class="f">X-ray ⟷ profile photo<input type="range" id="simPh" min="0" max="100" value="0"></label>
+    </div>
+    <div class="row" style="margin-top:8px"><button class="btn sm primary" id="simIdeal">✨ Ideal camouflage</button><button class="btn sm" id="simReset">Reset</button><button class="btn sm" id="simPNG">⬇ Download PNG</button></div>
+    <div id="simOut" style="margin-top:8px"></div>
   </div>
   <h2>Skeletal maturity — cervical vertebrae (CVMI)</h2>
   <div class="card">
@@ -571,7 +586,7 @@ function blobRefs(c){const r=[];for(const s in c.photos)if(c.photos[s])r.push([c
 function caseLabel(c){return (c.pt.name||'Unnamed case')+(c.pt.file?' · '+c.pt.file:'')}
 function renderCaseSel(){const s=$('#caseSel');s.innerHTML=cases.sort((a,b)=>(b.updated||b.created)-(a.updated||a.created)).map(c=>`<option value="${c.id}">${esc(caseLabel(c))}</option>`).join('');if(cur)s.value=cur.id}
 async function openCase(c){await saveNow();for(const u of urlCache.values())URL.revokeObjectURL(u);urlCache.clear();cur=c;
-  for(const k of['photos','fx','models','occ','w','arch'])cur[k]=cur[k]||{};cur.ceph=cur.ceph||{pts:{}};cur.ceph.pts=cur.ceph.pts||{};cur.ceph.auto=cur.ceph.auto||{};cur.ceph.cv=cur.ceph.cv||{};cur.ceph.vert=cur.ceph.vert||{};vertStep=-1;cur.ceph.meas=cur.ceph.meas||[];q3=null;measMode=null;measPts=[];cur.opg=cur.opg||{teeth:{},f:{}};cur.plan=cur.plan||{};cur.plan.sel=cur.plan.sel||[];cur.plan.refs=cur.plan.refs||[];cur.pt.h=cur.pt.h||{};
+  for(const k of['photos','fx','models','occ','w','arch'])cur[k]=cur[k]||{};cur.ceph=cur.ceph||{pts:{}};cur.ceph.pts=cur.ceph.pts||{};cur.ceph.auto=cur.ceph.auto||{};cur.ceph.cv=cur.ceph.cv||{};cur.ceph.vert=cur.ceph.vert||{};vertStep=-1;cur.ceph.meas=cur.ceph.meas||[];q3=null;measMode=null;measPts=[];simWarp=null;if(simOn){simSetUI();simLoadPhoto().then(()=>{simReport();cephView.draw()})}cur.opg=cur.opg||{teeth:{},f:{}};cur.plan=cur.plan||{};cur.plan.sel=cur.plan.sel||[];cur.plan.refs=cur.plan.refs||[];cur.pt.h=cur.pt.h||{};
   try{localStorage.setItem('oa-last',c.id)}catch(e){}
   renderCaseSel();bindAll();renderPhotos();renderWidths();renderAnalysis();renderBrushes();renderChart();lmIdx=nextMissing(0);extView='before';fillPopSelect();renderAutoInfo();renderPlanner();renderPred();renderLm();renderCephTable();renderLive(null);renderCvm();updDots();
   cephView.setImage(null);opgView.setImage(null);mesh.clear();
@@ -949,19 +964,19 @@ function renderLm(){$('#lmList').innerHTML=LMS.map(([k,n,d],i)=>`<div class="lm 
 $('#lmList').onclick=e=>{const c=e.target.closest('[data-clr]');if(c){delete cur.ceph.pts[c.dataset.clr];delete cur.ceph.auto[c.dataset.clr];save();renderLm();renderCephTable();cephView.draw();return}const r=e.target.closest('.lm');if(r){lmIdx=+r.dataset.i;renderLm()}};
 const LINES=[['S','N'],['N','A'],['N','B'],['Po','Or'],['Go','Me'],['ANS','PNS'],['U1A','U1T'],['L1A','L1T'],['Prn','PogS'],['N','Pog'],['S','Gn']];
 const cephView=new ImgView($('#cStage'),$('#cCv'),{empty:$('#cEmpty'),
-  hit:(q,tol)=>{let best=null,bd=tol;const VT=cur.ceph.vert||{};for(const V in VT)for(const k in VT[V]){const dd=len(sub(VT[V][k],q));if(dd<bd){bd=dd;best='#v'+V+'_'+k}}(cur.ceph.meas||[]).forEach((m,i)=>m.p.forEach((pt,j)=>{const d=len(sub(pt,q));if(d<bd){bd=d;best='#m'+i+'_'+j}}));for(const k in cur.ceph.pts){const d=len(sub(cur.ceph.pts[k],q));if(d<bd){bd=d;best=k}}return best},
-  onDrag:(k,q)=>{if(k.startsWith('#v')){const[V,kk]=k.slice(2).split('_');cur.ceph.vert[V][kk]=q.map(r1);return}if(k.startsWith('#m')){const[i,j]=k.slice(2).split('_').map(Number);cur.ceph.meas[i].p[j]=q.map(r1);liveSoon(null);return}cur.ceph.pts[k]=q.map(r1);if(cur.ceph.auto[k]){delete cur.ceph.auto[k];renderLm()}liveSoon(k)},onDrop:k=>{if(k&&k.startsWith('#v')&&vertStep<0)vertApply();save();renderCephTable();renderLive(null)},
+  hit:(q,tol)=>{if(simOn&&simAfter){const h=simHit(q,tol);if(h)return h}let best=null,bd=tol;const VT=cur.ceph.vert||{};for(const V in VT)for(const k in VT[V]){const dd=len(sub(VT[V][k],q));if(dd<bd){bd=dd;best='#v'+V+'_'+k}}(cur.ceph.meas||[]).forEach((m,i)=>m.p.forEach((pt,j)=>{const d=len(sub(pt,q));if(d<bd){bd=d;best='#m'+i+'_'+j}}));for(const k in cur.ceph.pts){const d=len(sub(cur.ceph.pts[k],q));if(d<bd){bd=d;best=k}}return best},
+  onDrag:(k,q)=>{if(k.startsWith('#s')||k.startsWith('#t')){simDrag(k,q);simReport();return}if(k.startsWith('#v')){const[V,kk]=k.slice(2).split('_');cur.ceph.vert[V][kk]=q.map(r1);return}if(k.startsWith('#m')){const[i,j]=k.slice(2).split('_').map(Number);cur.ceph.meas[i].p[j]=q.map(r1);liveSoon(null);return}cur.ceph.pts[k]=q.map(r1);if(cur.ceph.auto[k]){delete cur.ceph.auto[k];renderLm()}liveSoon(k)},onDrop:k=>{if(k&&(k.startsWith('#s')||k.startsWith('#t'))){save();simReport();return}if(k&&k.startsWith('#v')&&vertStep<0)vertApply();save();renderCephTable();renderLive(null)},
   onTap:q=>{if(vertStep>=0){vertTap(q);return}if(measMode){measTap(q);return}if(q3){q3Tap(q);return}if(calMode){calPts.push(q);if(calPts.length===2){const px=len(sub(calPts[0],calPts[1]));const mm=parseFloat(prompt('Distance between the two points in mm:','10'));
       if(mm>0&&px>0){cur.ceph.mmpp=+(mm/px).toFixed(5);$('[data-k="ceph.mmpp"]').value=cur.ceph.mmpp;save();toast('Calibrated: '+cur.ceph.mmpp+' mm per pixel')}calMode=false;calPts=[];$('#cCal').setAttribute('aria-pressed',false);renderCephTable()}
       renderLm();cephView.draw();return}
     cur.ceph.pts[LMS[lmIdx][0]]=q.map(r1);delete cur.ceph.auto[LMS[lmIdx][0]];save();lmIdx=nextMissing(lmIdx+1);renderLm();renderCephTable();cephView.draw()},
-  overlay:(c,v)=>{const P=cur.ceph.pts,d=v.dpr;if(v.grid)drawGrid(c,v);if(v.outline!==false)drawOutlines(c,v);drawVert(c,v);c.lineWidth=1.5*d;
+  overlay:(c,v)=>{const P=cur.ceph.pts,d=v.dpr;drawSimPhoto(c,v);if(v.grid)drawGrid(c,v);if(simOn&&simAfter){if(simShowB)drawOutlines(c,v,P,true);if(v.outline!==false)drawOutlines(c,v,simPts())}else if(v.outline!==false)drawOutlines(c,v);drawVert(c,v);c.lineWidth=1.5*d;
     if(cephView.trace!==false){c.strokeStyle='#38bdf8cc';for(const[a,b]of LINES)if(P[a]&&P[b]){const A=v.toScr(P[a]),B=v.toScr(P[b]);c.beginPath();c.moveTo(A[0],A[1]);c.lineTo(B[0],B[1]);c.stroke()}
       if(P.U1T&&P.L1T&&P.Mo){c.strokeStyle='#a78bfacc';const A=v.toScr(P.Mo),B=v.toScr(mid(P.U1T,P.L1T));c.beginPath();c.moveTo(A[0],A[1]);c.lineTo(B[0],B[1]);c.stroke()}}
     c.font=`${11*d}px sans-serif`;for(const k in P){const[x,y]=v.toScr(P[k]);const on=LMS[lmIdx]&&LMS[lmIdx][0]===k,au=cur.ceph.auto[k];c.fillStyle=on?'#facc15':au==='low'?'#f97316':au?'#22d3ee':'#f43f5e';c.beginPath();c.arc(x,y,(on?5:4)*d,0,7);c.fill();c.fillStyle='#fff';c.strokeStyle='#000';c.lineWidth=3*d;c.strokeText(k,x+6*d,y-6*d);c.fillText(k,x+6*d,y-6*d);c.lineWidth=1.5*d}
     for(const q of q3||[]){const[x,y]=v.toScr(q);c.strokeStyle='#facc15';c.lineWidth=2*d;c.beginPath();c.arc(x,y,8*d,0,7);c.stroke()}
     for(const q of calPts){const[x,y]=v.toScr(q);c.strokeStyle='#22c55e';c.beginPath();c.arc(x,y,7*d,0,7);c.stroke()}
-    drawMeasures(c,v);drawDragValues(c,v);drawLoupe(c,v)}});
+    drawMeasures(c,v);drawSim(c,v);drawDragValues(c,v);drawLoupe(c,v)}});
 imgControls(cephView,'c');
 $('#themeBtn').onclick=()=>{const t=THEMES[(THEMES.indexOf(getTheme())+1)%3];try{localStorage.setItem('oa-theme',t)}catch(e){}applyTheme(t);$('#themeBtn').textContent=t==='light'?'☀︎':t==='dark'?'☾':'◐';toast(t==='auto'?'Theme: follows the device':t==='light'?'Light mode':'Dark mode')};
 $('#themeBtn').textContent={light:'☀︎',dark:'☾',auto:'◐'}[getTheme()];
@@ -972,7 +987,15 @@ $('#cGrid').onclick=e=>{cephView.grid=!cephView.grid;e.target.setAttribute('aria
 try{$('#cInst').checked=localStorage.getItem('oa-instant')==='1'}catch(e){}
 $('#cInst').onchange=e=>{try{localStorage.setItem('oa-instant',e.target.checked?'1':'0')}catch(err){}if(e.target.checked)toast('⚡ Instant on: ✨ Auto-detect will run as soon as a ceph is uploaded')};
 fillAnalysisSelects();
-$('#cEdit').onclick=()=>editXray('ceph');$('#oEdit').onclick=()=>editXray('opg');
+$('#cEdit').onclick=()=>editXray('ceph');
+$('#cSim').onclick=async e=>{simOn=!simOn;e.target.setAttribute('aria-pressed',simOn);$('#simCard').hidden=!simOn;if(simOn){simSetUI();await simLoadPhoto();simReport();if(!Object.keys(simState().pts).length&&['U1T','U1A','L1T','L1A'].every(k=>cur.ceph.pts[k]))toast('Drag the orange incisors, or press ✨ Ideal camouflage')}cephView.draw()};
+$('#simBA').onclick=e=>{const b=e.target.closest('[data-v]');if(!b)return;simAfter=b.dataset.v==='after';simSetUI();cephView.draw()};
+$('#simShowB').onchange=e=>{simShowB=e.target.checked;cephView.draw()};$('#simEditST').onchange=e=>{simEditST=e.target.checked;cephView.draw()};
+$('#simUL').onchange=e=>{simState().ul=+e.target.value;delete simState().st.Ls;save();simReport();cephView.draw()};$('#simLL').onchange=e=>{simState().ll=+e.target.value;delete simState().st.Li;save();simReport();cephView.draw()};
+$('#simLLf').onchange=e=>{simState().llf=e.target.value;delete simState().st.Li;save();simReport();cephView.draw()};
+$('#simPh').oninput=async e=>{simPhA=+e.target.value/100;await simLoadPhoto();if(simPhA>0&&!simPhoto)toast('Add the Face – profile photo first');else if(simPhA>0&&!simReg())toast('Tap the profile photo points under Photographs → Profile prediction first');simReport();cephView.draw()};
+$('#simIdeal').onclick=()=>{simIdeal()};$('#simReset').onclick=()=>{const s=simState();s.pts={};s.st={};save();simReport();cephView.draw()};
+$('#simPNG').onclick=()=>{if(!cephView.img)return;const a=document.createElement('a');a.href=cephView.cv.toDataURL('image/png');a.download=(cur.pt.name||'case').replace(/[^\w-]+/g,'_')+'-simulation-'+(simAfter?'after':'before')+'.png';a.click()};$('#oEdit').onclick=()=>editXray('opg');
 $('#pvEdit').onclick=async()=>{const slot=phSlot,b=await DB.getBlob(cur.photos[slot]);$('#pvDlg').close();openEditor(b,SLOTS.find(s=>s[0]===slot)[1],async(blob,map)=>{if(slot==='ep'&&cur.fx.pred&&cur.fx.pred.pts){const keep=cur.fx.pred.pts;for(const k in keep)keep[k]=map(keep[k]);const old=cur.photos.ep,k2='b:'+uid();await DB.putBlob(k2,blob);cur.photos.ep=k2;await DB.delBlob(old);saveNow();renderPhotos();predImg=null;renderPred()}else await storePhoto(slot,blob);toast('Picture saved')})};
 $('#waBtn').onclick=()=>{$('#moreDlg').close();$('#waDlg').showModal()};$('#waPick').onchange=e=>{const fs=[...e.target.files];e.target.value='';$('#waDlg').close();if(fs.length)routeFiles(fs)};
 $('#mAuto').onclick=autoMeasure;
@@ -1677,7 +1700,91 @@ function toothPts(tip,apex,Wmm,k,ant){const ax=sub(apex,tip),L=len(ax),d=nrm(ax)
   const prof=[[0,.18],[.08,.42],[.25,.5],[.38,.44],[.6,.3],[.85,.14],[1,.03]],lab=[],lin=[];
   for(const[t,h]of prof){const b=[tip[0]+ax[0]*t,tip[1]+ax[1]*t];lab.push([b[0]+n[0]*W*h,b[1]+n[1]*W*h]);lin.push([b[0]-n[0]*W*h*(t<.4?1.15:1),b[1]-n[1]*W*h*(t<.4?1.15:1)])}
   return[...lab,...lin.reverse()]}
-function drawOutlines(c,v){const P=cur.ceph.pts,F=frameOf(P);if(!F)return;const d=v.dpr,{at,k,u,w}=F;c.save();c.lineWidth=1.6*d;c.strokeStyle='#93c5fdd9';c.lineJoin='round';
+/* ---------- treatment simulation (camouflage) on the ceph ----------
+   Drag the incisors to plan the movement; the lips follow by lip : incisor retraction ratios; the profile photo can be laid over the X-ray. */
+let simOn=false,simAfter=true,simShowB=true,simEditST=false,simPhA=0,simPhoto=null,simWarp=null;
+const SIM_UL=[[0.57,'1 : 1.75 — average lips'],[0.5,'1 : 2 — medium'],[0.33,'1 : 3 — mild'],[0.61,'Thin lips (0.61 : 1)'],[0.17,'Thick lips (0.17 : 1)'],[1,'1 : 1']];
+const SIM_LL=[[0.83,'1 : 1.2 — average lips'],[0.5,'1 : 2'],[0.98,'Thin lips (0.98 : 1)'],[0.44,'Thick lips (0.44 : 1)'],[1,'1 : 1']];
+function simState(){const s=cur.ceph.sim=cur.ceph.sim||{};s.pts=s.pts||{};s.st=s.st||{};const lp=(cur.plan||{}).lipSim;
+  if(s.ul==null)s.ul=lp==='thin'?0.61:lp==='thick'?0.17:0.57;if(s.ll==null)s.ll=lp==='thin'?0.98:lp==='thick'?0.44:0.83;s.llf=s.llf||'L1';return s}
+const simFace=P=>P.S&&P.N?Math.sign(P.N[0]-P.S[0])||1:1;
+function simPxmm(){const mm=num(cur.ceph.mmpp);if(mm)return 1/mm;const P=cur.ceph.pts;return P.S&&P.N?len(sub(P.N,P.S))/70:10}
+const lerp2=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];
+/* simulated landmarks: moved incisors + lips that follow */
+function simPts(){const P=cur.ceph.pts,s=simState(),Q={...P};for(const k of['U1T','U1A','L1T','L1A'])if(s.pts[k]&&P[k])Q[k]=s.pts[k];
+  const f=simFace(P),px=simPxmm(),back=k=>P[k]&&Q[k]?-(Q[k][0]-P[k][0])*f/px:0,rU=back('U1T'),rL=back('L1T');
+  if(P.Ls)Q.Ls=s.st.Ls||[P.Ls[0]-f*s.ul*rU*px,P.Ls[1]];if(P.Li)Q.Li=s.st.Li||[P.Li[0]-f*s.ll*(s.llf==='U1'?rU:rL)*px,P.Li[1]];return Q}
+function simHandles(){const Q=simPts(),h=[];for(const t of['U1','L1'])if(Q[t+'T']&&Q[t+'A']){h.push(['#s'+t+'T',Q[t+'T']],['#s'+t+'A',Q[t+'A']],['#s'+t+'C',lerp2(Q[t+'T'],Q[t+'A'],0.25)])}
+  if(simEditST)for(const k of['Ls','Li'])if(Q[k])h.push(['#t'+k,Q[k]]);return h}
+function simHit(q,tol){let best=null,bd=tol*1.2;for(const[k,p]of simHandles()){const d=len(sub(p,q));if(d<bd){bd=d;best=k}}return best}
+function simDrag(key,q){const s=simState(),Q=simPts();if(key.startsWith('#t')){s.st[key.slice(2)]=q.map(r1);return}
+  const t=key.slice(2,4),T=Q[t+'T'],A=Q[t+'A'],L=len(sub(A,T)),w=key.slice(4);
+  if(w==='T'){const d=nrm(sub(A,q));s.pts[t+'T']=q.map(r1);s.pts[t+'A']=[q[0]+d[0]*L,q[1]+d[1]*L].map(r1)}// crown moves, root follows the tooth's own axis (tipping)
+  else if(w==='A'){const d=nrm(sub(q,T));s.pts[t+'T']=T.map(r1);s.pts[t+'A']=[T[0]+d[0]*L,T[1]+d[1]*L].map(r1)}// root moves around the incisal edge (torque)
+  else{const c=lerp2(T,A,0.25),d=sub(q,c);s.pts[t+'T']=[T[0]+d[0],T[1]+d[1]].map(r1);s.pts[t+'A']=[A[0]+d[0],A[1]+d[1]].map(r1)}}// whole tooth (bodily)
+const simMeas=Q=>Object.fromEntries(cephMeasures({...cur,ceph:{...cur.ceph,pts:Q}}).map(m=>[m.key,m]));
+const rot2=(p,c,a)=>{const x=p[0]-c[0],y=p[1]-c[1],C=Math.cos(a),S=Math.sin(a);return[c[0]+x*C-y*S,c[1]+x*S+y*C]};
+/* ideal camouflage: lower incisors within Tweed limits, then upper incisors at 2.5 mm overjet / overbite with a normal inter-incisal angle */
+function simIdeal(){const P=cur.ceph.pts;const need=['S','N','Go','Me','U1T','U1A','L1T','L1A'].filter(k=>!P[k]);if(need.length){toast('Place '+need.join(', ')+' first');return}
+  const s=simState(),f=simFace(P),px=simPxmm();s.pts={};s.st={};
+  let LT=P.L1T,LA=P.L1A;const imp=simMeas(P).IMPA.v,tgt=imp>100?95:imp<85?90:imp;
+  if(tgt!==imp){const CR=lerp2(LT,LA,0.6);let best=0,bd=1e9;for(let a=-0.5;a<=0.5;a+=0.002){const Q={...P,L1T:rot2(LT,CR,a),L1A:rot2(LA,CR,a)},v=simMeas(Q).IMPA.v,dd=Math.abs(v-tgt);if(dd<bd){bd=dd;best=a}}LT=rot2(LT,CR,best);LA=rot2(LA,CR,best)}
+  const UT=[LT[0]+f*2.5*px,LT[1]+2.5*px],Lu=len(sub(P.U1A,P.U1T));let bestA=null,bp=1e9;
+  for(let a=0;a<2*Math.PI;a+=Math.PI/720){const UA=[UT[0]+Math.cos(a)*Lu,UT[1]+Math.sin(a)*Lu];if(UA[1]>UT[1]-0.5*Lu)continue;const M=simMeas({...P,U1T:UT,U1A:UA,L1T:LT,L1A:LA}),ii=M.II.v,u=M.U1SN.v;if(ii==null||u==null)continue;
+    const pen=Math.abs(ii-131)+3*Math.max(0,98-u,u-110);if(pen<bp){bp=pen;bestA=UA}}
+  if(!bestA){toast('Could not find a position — drag the teeth by hand');return}
+  s.pts={U1T:UT.map(r1),U1A:bestA.map(r1),L1T:LT.map(r1),L1A:LA.map(r1)};save();simReport();cephView.draw()}
+function simReport(){const el=$('#simOut');if(!el||!simOn)return;const P=cur.ceph.pts;$('#simCard').hidden=false;
+  if(!['U1T','U1A','L1T','L1A'].every(k=>P[k])){el.innerHTML='<div class="note">Place the incisor tips and apices (U1T, U1A, L1T, L1A) first — then drag the orange teeth.</div>';return}
+  const Q=simPts(),f=simFace(P),px=simPxmm(),cal=!!num(cur.ceph.mmpp),mv=k=>{const d=sub(Q[k],P[k]);return{back:-d[0]*f/px,down:d[1]/px}};
+  const M0=simMeas(P),M1=simMeas(Q),oj=p=>(p.U1T[0]-p.L1T[0])*f/px,ob=p=>(p.U1T[1]-p.L1T[1])/px;
+  const kind=(c,a)=>Math.abs(c)<0.3&&Math.abs(a)<0.3?'no change':Math.abs(a-c)<=1?'bodily (translation)':c*a<0&&Math.abs(a)>0.5?'uncontrolled tipping':Math.abs(a)<=0.5?'controlled tipping':Math.abs(a)>Math.abs(c)?'root movement (torque)':'tipping';
+  const desc=(t,nm,lower)=>{const c=mv(t+'T'),a=mv(t+'A');const vv=c.down*(lower?-1:1);return `<b>${nm}</b>: edge ${Math.abs(c.back)<0.05?'stays':c.back>0?r1(c.back)+' mm back':r1(-c.back)+' mm forward'}${Math.abs(vv)>=0.3?', '+r1(Math.abs(vv))+' mm '+(vv>0?'extrusion':'intrusion'):''}; apex ${Math.abs(a.back)<0.05?'stays':a.back>0?r1(a.back)+' mm back':r1(-a.back)+' mm forward'} — ${kind(c.back,a.back)}`};
+  const rows=[['U1SN'],['U1NAa'],['U1NAm'],['IMPA'],['L1NBa'],['L1NBm'],['II'],['OJ','Overjet (mm)',oj,2.5],['OB','Overbite (mm)',ob,2.5],['ULE'],['LLE'],['NLA']].map(([k,nm,fn,nrm0])=>{
+    if(fn)return[nm,fn(P),fn(Q),nrm0];const a=M0[k],b=M1[k];return a?[a.name+(/\(mm\)/.test(a.name)?'':a.unit==='°'?' (°)':' (mm)'),a.v,b&&b.v,a.norm]:null}).filter(r=>r&&(r[1]!=null||r[2]!=null));
+  const fm=v=>v==null?'—':r1(v);const tbl=`<table><tr><th>Measure</th><th>Before</th><th>After</th><th>Norm</th></tr>${rows.map(r=>`<tr><td>${esc(r[0])}</td><td>${fm(r[1])}</td><td><b>${fm(r[2])}</b></td><td class="muted">${r[3]!=null?r1(r[3]):''}</td></tr>`).join('')}</table>`;
+  const w=[],u1=mv('U1T'),ua=mv('U1A'),l1=mv('L1T');
+  if(M1.U1SN&&M1.U1SN.v!=null&&M1.U1SN.v<95)w.push('Upper incisors very upright (U1–SN under 95°) — needs palatal root torque; watch for loss of torque.');
+  if(M1.IMPA&&M1.IMPA.v!=null&&M1.IMPA.v>100)w.push('Lower incisors proclined beyond 100° (IMPA) — risk of gingival recession through thin symphysis.');
+  if(M1.IMPA&&M1.IMPA.v!=null&&M1.IMPA.v<82)w.push('Lower incisors very retroclined (IMPA under 82°).');
+  if(Math.abs(ua.back)>4)w.push('Upper incisor apex moves '+r1(Math.abs(ua.back))+' mm — check the palatal cortex: roots can touch it (root resorption risk).');
+  if(u1.back>0.5)w.push(`Upper retraction of ${r1(u1.back)} mm needs about ${r1(2*u1.back)} mm of space in the upper arch (2 mm of arch length per 1 mm of incisor retraction).`);
+  if(l1.back>0.5)w.push(`Lower retraction of ${r1(l1.back)} mm needs about ${r1(2*l1.back)} mm of space in the lower arch.`);
+  const R=simReg();
+  el.innerHTML=`<div class="note">${desc('U1','Upper incisor',false)}<br>${desc('L1','Lower incisor',true)}<br>Lips: upper ${r1(Math.abs((Q.Ls[0]-P.Ls[0])*f/px))} mm ${(Q.Ls[0]-P.Ls[0])*f>0?'forward':'back'}, lower ${r1(Math.abs((Q.Li[0]-P.Li[0])*f/px))} mm ${(Q.Li[0]-P.Li[0])*f>0?'forward':'back'}${simState().st.Ls||simState().st.Li?' (edited by hand)':''}.${cal?'':' <b>Not calibrated</b> — mm are estimated from S–N = 70 mm.'}</div>
+    ${w.length?'<ul class="note">'+w.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':''}${tbl}
+    <div class="note">${R?'':'To lay the profile photo over the X-ray: add the Face – profile photo, tap its points under Photographs → Profile prediction, and place Prn, Sn, Ls, Li and PogS on the ceph. '}Lip response from lip : incisor retraction ratios (Leonardi et al. 2010 review; thin vs thick lips). An illustration for planning, not a guarantee.</div>`}
+/* profile photo over the X-ray: similarity fit of the shared soft-tissue points (photo → ceph) */
+async function simLoadPhoto(){const k=cur.photos.ep;if(!k){simPhoto=null;return}if(simPhoto&&simPhoto.key===k)return;try{const im=await loadImg(await blobURL(k)),W=Math.min(1100,im.width),sc=W/im.width,cv=document.createElement('canvas');cv.width=W;cv.height=Math.round(im.height*sc);cv.getContext('2d').drawImage(im,0,0,cv.width,cv.height);simPhoto={key:k,cv,sc};simWarp=null}catch(e){simPhoto=null}}
+function simReg(){if(!simPhoto)return null;const ph=((cur.fx||{}).pred||{}).pts||{},P=cur.ceph.pts,ks=['Prn','Sn','Ls','Li','PogS'].filter(k=>ph[k]&&P[k]);if(ks.length<2)return null;
+  const p0=ks.map(k=>[ph[k][0]*simPhoto.sc,ph[k][1]*simPhoto.sc]),q=ks.map(k=>P[k]);const fl=ph.Prn&&ph.Sn&&P.Prn&&P.Sn&&Math.sign(ph.Prn[0]-ph.Sn[0])!==Math.sign(P.Prn[0]-P.Sn[0]);
+  const p=p0.map(a=>fl?[-a[0],a[1]]:a),n=ks.length,pc=[p.reduce((s,a)=>s+a[0],0)/n,p.reduce((s,a)=>s+a[1],0)/n],qc=[q.reduce((s,a)=>s+a[0],0)/n,q.reduce((s,a)=>s+a[1],0)/n];
+  let A=0,B=0,N2=0;for(let i=0;i<n;i++){const x=p[i][0]-pc[0],y=p[i][1]-pc[1],u=q[i][0]-qc[0],w=q[i][1]-qc[1];A+=x*u+y*w;B+=x*w-y*u;N2+=x*x+y*y}if(!N2)return null;
+  const sc=Math.hypot(A,B)/N2,th=Math.atan2(B,A),C=sc*Math.cos(th),S=sc*Math.sin(th);let M=[C,-S,S,C];if(fl)M=[-M[0],M[1],-M[2],M[3]];// q = M·p + t
+  const t=[qc[0]-(M[0]*p0.reduce((s,a)=>s+a[0],0)/n+M[1]*p0.reduce((s,a)=>s+a[1],0)/n),qc[1]-(M[2]*p0.reduce((s,a)=>s+a[0],0)/n+M[3]*p0.reduce((s,a)=>s+a[1],0)/n)];return{M,t}}
+function warpCanvas(src,ctrl,sig){const W=src.width,H=src.height,x=src.getContext('2d'),before=x.getImageData(0,0,W,H),b=before.data,out=document.createElement('canvas');out.width=W;out.height=H;const ox=out.getContext('2d'),after=ox.createImageData(W,H),o=after.data;o.set(b);
+  const s2=2*sig*sig,x0=Math.max(0,Math.floor(Math.min(...ctrl.map(c=>c.c[0]))-3*sig)),x1=Math.min(W-2,Math.ceil(Math.max(...ctrl.map(c=>c.c[0]))+3*sig)),y0=Math.max(0,Math.floor(Math.min(...ctrl.map(c=>c.c[1]))-2*sig)),y1=Math.min(H-2,Math.ceil(Math.max(...ctrl.map(c=>c.c[1]))+2*sig));
+  for(let yy=y0;yy<=y1;yy++)for(let xx=x0;xx<=x1;xx++){let sx=0,sy=0,sw=0.12;for(const c of ctrl){const dx=xx-c.c[0],dy=yy-c.c[1],w=Math.exp(-(dx*dx+dy*dy)/s2);sx+=c.d[0]*w;sy+=c.d[1]*w;sw+=w}sx/=Math.max(1,sw);sy/=Math.max(1,sw);if(Math.abs(sx)<0.05&&Math.abs(sy)<0.05)continue;
+    const fx=xx-sx,fy=yy-sy,ix=Math.floor(fx),iy=Math.floor(fy),tx=fx-ix,ty=fy-iy;if(ix<0||iy<0||ix>=W-1||iy>=H-1)continue;const a=(iy*W+ix)*4,oo=(yy*W+xx)*4;
+    for(let ch=0;ch<4;ch++)o[oo+ch]=(b[a+ch]*(1-tx)+b[a+4+ch]*tx)*(1-ty)+(b[a+W*4+ch]*(1-tx)+b[a+W*4+4+ch]*tx)*ty}
+  ox.putImageData(after,0,0);return out}
+function simPhotoCanvas(R){if(!simAfter)return simPhoto.cv;const P=cur.ceph.pts,Q=simPts();if(!P.Ls||!P.Li||!P.Sn||!P.PogS)return simPhoto.cv;
+  const det=R.M[0]*R.M[3]-R.M[1]*R.M[2],Mi=[R.M[3]/det,-R.M[1]/det,-R.M[2]/det,R.M[0]/det],toPh=q=>{const x=q[0]-R.t[0],y=q[1]-R.t[1];return[Mi[0]*x+Mi[1]*y,Mi[2]*x+Mi[3]*y]},vec=d=>[Mi[0]*d[0]+Mi[1]*d[1],Mi[2]*d[0]+Mi[3]*d[1]];
+  const dL=sub(Q.Ls,P.Ls),dI=sub(Q.Li,P.Li),ctrl=[[P.Sn,[0,0]],[P.Ls,dL],[mid(P.Ls,P.Li),[(dL[0]+dI[0])/2,(dL[1]+dI[1])/2]],[P.Li,dI],[mid(P.Li,P.PogS),[dI[0]*0.35,dI[1]*0.35]],[P.PogS,[0,0]]].concat(P.Prn?[[P.Prn,[0,0]]]:[]).map(([c,d])=>({c:toPh(c),d:vec(d)}));
+  const key=JSON.stringify(ctrl.map(c=>c.d.map(v=>Math.round(v*4))));if(simWarp&&simWarp.key===key&&simWarp.ph===simPhoto.key)return simWarp.cv;
+  if(ctrl.every(c=>Math.abs(c.d[0])<0.05&&Math.abs(c.d[1])<0.05))return simPhoto.cv;
+  const sig=Math.max(6,0.42*len(sub(ctrl[0].c,ctrl[1].c)));simWarp={key,ph:simPhoto.key,cv:warpCanvas(simPhoto.cv,ctrl,sig)};return simWarp.cv}
+function drawSimPhoto(c,v){if(!simOn||!(simPhA>0)||!simPhoto)return;const R=simReg();if(!R)return;const im=simPhotoCanvas(R);c.save();c.globalAlpha=simPhA;c.setTransform(v.s*R.M[0],v.s*R.M[2],v.s*R.M[1],v.s*R.M[3],v.s*R.t[0]+v.ox,v.s*R.t[1]+v.oy);c.drawImage(im,0,0);c.restore()}
+function drawSim(c,v){if(!simOn||!simAfter)return;const P=cur.ceph.pts,F=frameOf(P);if(!F)return;const Q=simPts(),d=v.dpr;c.save();c.lineWidth=1.8*d;c.lineJoin='round';
+  for(const[t,wd]of[['U1',7],['L1',6]])if(Q[t+'T']&&Q[t+'A']){c.strokeStyle='#f59e0b';c.fillStyle='#f59e0b55';spline(c,v,toothPts(Q[t+'T'],Q[t+'A'],wd,F.k,F.u),true);c.fill()}
+  if(P.Prn&&P.PogS){const at=F.at,sto=Q.Ls&&Q.Li?at(lerp2(Q.Ls,Q.Li,.5),-3,0):null,lmf=Q.Li?at(lerp2(Q.Li,P.PogS,.5),-4,0):null;c.strokeStyle='#f472b6';c.lineWidth=2.2*d;spline(c,v,[P.Prn,P.Cm,P.Sn,Q.Ls,sto,Q.Li,lmf,P.PogS])}
+  for(const[k,p]of simHandles()){const[x,y]=v.toScr(p),soft=k.startsWith('#t'),ctr=k.endsWith('C');c.fillStyle=soft?'#f472b6':'#a855f7';c.strokeStyle='#fff';c.lineWidth=1.5*d;c.beginPath();c.arc(x,y,(ctr?7:5)*d,0,7);if(ctr)c.stroke();else{c.fill();c.stroke()}}
+  c.restore()}
+function simSetUI(){const s=simState();$('#simUL').innerHTML=SIM_UL.map(([v,n])=>`<option value="${v}"${+s.ul===v?' selected':''}>${n}</option>`).join('');$('#simLL').innerHTML=SIM_LL.map(([v,n])=>`<option value="${v}"${+s.ll===v?' selected':''}>${n}</option>`).join('');
+  if(!SIM_UL.some(([v])=>v===+s.ul))$('#simUL').insertAdjacentHTML('beforeend',`<option value="${s.ul}" selected>${s.ul} : 1</option>`);if(!SIM_LL.some(([v])=>v===+s.ll))$('#simLL').insertAdjacentHTML('beforeend',`<option value="${s.ll}" selected>${s.ll} : 1</option>`);
+  $('#simLLf').value=s.llf;for(const b of $$('#simBA button'))b.setAttribute('aria-pressed',(b.dataset.v==='after')===simAfter)}
+
+function drawOutlines(c,v,P=cur.ceph.pts,faded){const F=frameOf(P);if(!F)return;const d=v.dpr,{at,k,u,w}=F;c.save();c.lineWidth=1.6*d;c.strokeStyle=faded?'#93c5fd70':'#93c5fdd9';c.lineJoin='round';if(faded)c.setLineDash([5*d,4*d]);
   const L=(a,b,t)=>a&&b&&[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];
   // sella turcica
   {const r=5.5*k,aw=Math.atan2(w[1],w[0]);const[x,y]=v.toScr(P.S);c.beginPath();c.arc(x,y,r*v.s,aw-1.75,aw+1.75);c.stroke()}
