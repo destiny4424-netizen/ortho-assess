@@ -327,7 +327,7 @@ dialog::backdrop{background:#000a}
   </div>
 
   <h2>Tooth widths, Bolton and space analysis</h2>
-  <div class="card"><div class="row"><button class="btn primary" id="mAuto">✨ Auto-measure teeth</button><button class="btn sm" id="mSwap" title="If the teeth were numbered on the wrong side">⇄ Swap left / right</button><button class="btn sm" id="mPts" aria-pressed="true">Show tooth points</button></div><div id="autoInfo" style="margin-top:8px"></div></div>
+  <div class="card"><div class="row"><button class="btn primary" id="mAuto">✨ Auto-measure teeth</button><button class="btn sm" id="mSwap" title="If the teeth were numbered on the wrong side">⇄ Swap left / right</button><button class="btn sm" id="mPts" aria-pressed="true">Show tooth points</button><button class="btn sm" id="mCheck">🔎 Check detection</button></div><div id="autoInfo" style="margin-top:8px"></div></div>
   <p class="note">Mesio-distal widths in mm — measure on the 3D model with 📏 and Save, or type them in from calipers.</p>
   <div class="card wrapx" id="widths"></div>
   <div class="card grid">
@@ -504,6 +504,10 @@ dialog::backdrop{background:#000a}
     <button class="btn sm" id="edReset">Reset</button><span style="flex:1"></span><button class="btn sm" id="edCancel">Cancel</button><button class="btn sm primary" id="edSave">Save</button></div>
   <div class="note">Drag inside the box to move it, drag a corner to resize, or drag outside to draw a new crop.</div>
 </div></dialog>
+<dialog id="chkDlg" style="width:min(980px,calc(100vw - 16px))"><div style="padding:12px;display:flex;flex-direction:column;gap:8px">
+  <b>What Claude found on each model</b><div class="note">Cyan = contact points, yellow = cusp, red = left out because it looks wrong. The numbers should run 7→1 | 1→7 around a U. Screenshot this if the set-up looks wrong.</div>
+  <div id="chkOut" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px"></div>
+  <div class="row"><span style="flex:1"></span><button class="btn" onclick="this.closest('dialog').close()">Close</button></div></div></dialog>
 <dialog id="waDlg"><div style="padding:16px;display:flex;flex-direction:column;gap:10px">
   <b>📲 Get files from WhatsApp</b>
   <div><b>Android</b> — add Ortho Assess to the home screen once (Chrome ⋮ → Add to Home screen / Install app). Then in WhatsApp long-press the STL, X-ray, photo, PDF or ZIP → Share → <b>Ortho Assess</b>. It opens and adds the files to the case on screen.</div>
@@ -968,7 +972,15 @@ fillAnalysisSelects();
 $('#cEdit').onclick=()=>editXray('ceph');$('#oEdit').onclick=()=>editXray('opg');
 $('#pvEdit').onclick=async()=>{const slot=phSlot,b=await DB.getBlob(cur.photos[slot]);$('#pvDlg').close();openEditor(b,SLOTS.find(s=>s[0]===slot)[1],async(blob,map)=>{if(slot==='ep'&&cur.fx.pred&&cur.fx.pred.pts){const keep=cur.fx.pred.pts;for(const k in keep)keep[k]=map(keep[k]);const old=cur.photos.ep,k2='b:'+uid();await DB.putBlob(k2,blob);cur.photos.ep=k2;await DB.delBlob(old);saveNow();renderPhotos();predImg=null;renderPred()}else await storePhoto(slot,blob);toast('Picture saved')})};
 $('#waBtn').onclick=()=>{$('#moreDlg').close();$('#waDlg').showModal()};$('#waPick').onchange=e=>{const fs=[...e.target.files];e.target.value='';$('#waDlg').close();if(fs.length)routeFiles(fs)};
-$('#mAuto').onclick=autoMeasure;$('#mSwap').onclick=swapSides;$('#mPts').onclick=e=>{e.target.setAttribute('aria-pressed',e.target.getAttribute('aria-pressed')!=='true');showToothMarks()};
+$('#mAuto').onclick=autoMeasure;
+$('#mCheck').onclick=()=>{const A=cur.models.auto||{},out=$('#chkOut');out.innerHTML='';let any=false;
+  for(const side of['upper','lower']){const S=A[side];if(!S||!origP[side])continue;any=true;const F=frameFromTeeth(S.frame,S.teeth,side),shot=orthoShot(origP[side],F,900),bad=checkTeeth(side)||{},cv=document.createElement('canvas');cv.width=cv.height=900;cv.style.width='100%';cv.style.borderRadius='10px';
+    const box=document.createElement('div');box.innerHTML=`<b>${side==='upper'?'Upper':'Lower'}</b> — ${Object.keys(S.teeth).length} teeth${Object.keys(bad).length?`, left out: ${Object.entries(bad).map(([k,v])=>k+' ('+v+')').join('; ')}`:''}`;box.prepend(cv);out.append(box);
+    const im=new Image();im.onload=()=>{const x=cv.getContext('2d');x.drawImage(im,0,0);x.font='bold 18px sans-serif';x.lineWidth=2;const ord=ARCH_TEETH[side].filter(k=>S.teeth[k]);x.strokeStyle='#ffffff66';x.beginPath();
+      ord.forEach((k,i)=>{const p=shot.toPix(mid3(S.teeth[k].m,S.teeth[k].d));i?x.lineTo(p[0],p[1]):x.moveTo(p[0],p[1])});x.stroke();
+      for(const k of ord){const t=S.teeth[k],col=bad[k]?'#ef4444':'#22d3ee',m=shot.toPix(t.m),d=shot.toPix(t.d);x.strokeStyle=col;x.beginPath();x.moveTo(m[0],m[1]);x.lineTo(d[0],d[1]);x.stroke();for(const q of[m,d]){x.fillStyle=col;x.beginPath();x.arc(q[0],q[1],5,0,7);x.fill()}
+        if(t.c){const c=shot.toPix(t.c);x.fillStyle=bad[k]?'#ef4444':'#facc15';x.beginPath();x.arc(c[0],c[1],6,0,7);x.fill();x.fillStyle='#fff';x.strokeStyle='#000';x.lineWidth=4;x.strokeText(k,c[0]+8,c[1]-8);x.fillText(k,c[0]+8,c[1]-8);x.lineWidth=2}}};im.src=shot.url}
+  if(!any)return toast('Run ✨ Auto-measure teeth first');$('#chkDlg').showModal()};$('#mSwap').onclick=swapSides;$('#mPts').onclick=e=>{e.target.setAttribute('aria-pressed',e.target.getAttribute('aria-pressed')!=='true');showToothMarks()};
 $('#extViews').onclick=e=>{const b=e.target.closest('[data-v]');if(b&&!b.disabled)showExtraction(b.dataset.v)};
 $('#predCv').onclick=e=>{if(!predImg)return;const r=e.target.getBoundingClientRect(),pts=((cur.fx.pred=cur.fx.pred||{}).pts=cur.fx.pred.pts||{}),need=PRED_PTS.find(([p])=>!pts[p]);if(!need)return;
   pts[need[0]]=[(e.clientX-r.left)*predImg.width/r.width,(e.clientY-r.top)*predImg.height/r.height].map(r1);if(!num(cur.fx.predScale)){cur.fx.predScale=defaultScale();$('#predScale').value=cur.fx.predScale}saveNow();renderPred()};
@@ -1271,8 +1283,8 @@ function orthoShot(P,F,size=1400){let amin=1e9,amax=-1e9,bmin=1e9,bmax=-1e9,hmax
 const ARCH_TEETH={upper:[17,16,15,14,13,12,11,21,22,23,24,25,26,27],lower:[47,46,45,44,43,42,41,31,32,33,34,35,36,37]};
 const XY={type:'object',properties:{x:{type:'number'},y:{type:'number'}},required:['x','y'],additionalProperties:false};
 async function claudeTeeth(side,shot){const key=lsGet('oa-claude-key'),T=ARCH_TEETH[side],rightOn=side==='upper'?'LEFT':'RIGHT';
-  const schema={type:'object',properties:{is_occlusal_view:{type:'boolean'},teeth:{type:'array',items:{type:'object',properties:{fdi:{type:'integer',enum:T},mesial:XY,distal:XY,cusp:XY,confidence:{type:'string',enum:['high','medium','low']}},required:['fdi','mesial','distal','cusp','confidence'],additionalProperties:false}},note:{type:'string'}},required:['is_occlusal_view','teeth','note'],additionalProperties:false};
-  const prompt=`This is a rendered occlusal view of a digital ${side} dental cast (intra-oral scan), ${shot.size} x ${shot.size} pixels, ${shot.mmpp.toFixed(4)} mm per pixel. Anterior teeth are at the TOP of the image. The patient's RIGHT side is on the image ${rightOn}. Use FDI numbering (${side==='upper'?'upper right 17–11, upper left 21–27':'lower right 47–41, lower left 31–37'}).
+  const schema={type:'object',properties:{is_occlusal_view:{type:'boolean'},incisors_at:{type:'string',enum:['top','bottom','left','right']},teeth:{type:'array',items:{type:'object',properties:{fdi:{type:'integer',enum:T},mesial:XY,distal:XY,cusp:XY,confidence:{type:'string',enum:['high','medium','low']}},required:['fdi','mesial','distal','cusp','confidence'],additionalProperties:false}},note:{type:'string'}},required:['is_occlusal_view','incisors_at','teeth','note'],additionalProperties:false};
+  const prompt=`This is a rendered occlusal view of a digital ${side} dental cast (intra-oral scan), ${shot.size} x ${shot.size} pixels, ${shot.mmpp.toFixed(4)} mm per pixel. First find the incisors (they may be at the top or the bottom of the image) and report where they are in incisors_at. Numbering rule for this ${side} view: when the incisors are at the TOP, the patient's RIGHT side is on the image ${rightOn}; when they are at the BOTTOM, the patient's right is on the other side. Use FDI numbering (${side==='upper'?'upper right 17–11, upper left 21–27':'lower right 47–41, lower left 31–37'}).
 For every tooth you can see, give in image pixels (x from left, y from top):
 - mesial: the mesial contact point — the most mesial point of the crown outline where it touches, or would touch, the neighbouring tooth (the end of the mesiodistal diameter);
 - distal: the distal contact point (other end of the mesiodistal diameter);
@@ -1292,6 +1304,23 @@ function teethMetrics(side,A){const T=A.teeth,g=k=>T[k],c=(k,f)=>T[k]&&T[k][f],F
     let dep=0;for(const k of[34,35,36,44,45,46])if(T[k]){const p=T[k].c,dd=-d3([p[0]-a[0],p[1]-a[1],p[2]-a[2]],nz);if(dd>dep)dep=dd}out.spee=+dep.toFixed(1)}}
   return out}
 const mid3=(a,b)=>[(a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2];
+/* the arch's front direction from the detected teeth themselves (incisors minus molars) */
+function frameFromTeeth(F,teeth,side){const cen=ks=>{const ps=ks.map(k=>teeth[k]).filter(Boolean).map(t=>mid3(t.m,t.d));return ps.length?ps.reduce((a,p)=>v3(a,p,1/ps.length),[0,0,0]):null};
+  const U=side==='upper',inc=cen(U?[11,21,12,22]:[41,31,42,32]),mol=cen(U?[16,26,17,27,15,25]:[46,36,47,37,45,35]);if(!inc||!mol)return F;
+  let a=v3(inc,mol,-1);a=v3(a,F.e3,-d3(a,F.e3));if(Math.hypot(...a)<5)return F;const e2=n3(a);return{...F,e2,e1:n3(x3(e2,F.e3))}}
+/* plausibility of each detected tooth: width for its type, cusp inside the crown, order along the arch, correct side */
+const W_RANGE={1:[4,10.5],2:[4,9.5],3:[5,10],4:[5,9.5],5:[5,9.5],6:[8,13.5],7:[7.5,13]};
+function checkTeeth(side){const A=cur.models.auto&&cur.models.auto[side];if(!A)return null;const F=A.frame,T=A.teeth,pl=p=>{const d=v3(p,F.c,-1);return[d3(d,F.e1),d3(d,F.e2)]},bad={};
+  const U=side==='upper',qs=U?[1,2]:[4,3],ic=[U?11:41,U?21:31].map(k=>T[k]&&pl(mid3(T[k].m,T[k].d))).filter(Boolean);const mid=ic.length?[ic.reduce((a,p)=>a+p[0],0)/ic.length,ic.reduce((a,p)=>a+p[1],0)/ic.length]:null;
+  const sides={};for(const q of qs){const xs=[4,5,6,7].map(u=>T[q*10+u]&&pl(mid3(T[q*10+u].m,T[q*10+u].d))[0]).filter(v=>v!=null);sides[q]=xs.length?Math.sign(xs.reduce((a,b)=>a+b,0)/xs.length-(mid?mid[0]:0)):0}
+  if(qs.every(q=>sides[q])&&sides[qs[0]]===sides[qs[1]])for(const k in T)if(Math.floor(k/10)===qs[1]&&k%10>=4)bad[k]='on the same side as the other quadrant';
+  for(const k in T){const t=T[k],u=k%10,w=len(sub(pl(t.d),pl(t.m))),r=W_RANGE[u];if(w<r[0]||w>r[1])bad[k]=bad[k]||`width ${r1(w)} mm is not possible for this tooth`;
+    if(t.c){const cc=pl(mid3(t.m,t.d)),cu=pl(t.c);if(len(sub(cc,cu))>0.9*w)bad[k]=bad[k]||'cusp is outside the crown'}}
+  if(mid&&sides[qs[0]]&&sides[qs[1]]&&sides[qs[0]]!==sides[qs[1]])for(const k in T){const q=Math.floor(k/10),u=k%10;if(u<3||!sides[q])continue;const x=pl(mid3(T[k].m,T[k].d))[0]-mid[0];if(Math.sign(x)!==sides[q]&&Math.abs(x)>3)bad[k]=bad[k]||'on the wrong side of the arch'}
+  {const ks=Object.keys(T);for(let i=0;i<ks.length;i++)for(let j=i+1;j<ks.length;j++){const a=T[ks[i]],c=T[ks[j]];if(len(sub(pl(mid3(a.m,a.d)),pl(mid3(c.m,c.d))))<2){bad[ks[j]]=bad[ks[j]]||'placed on top of tooth '+ks[i];bad[ks[i]]=bad[ks[i]]||'placed on top of tooth '+ks[j]}}}
+  if(mid)for(const q of qs){let last=-1;for(let u=1;u<=7;u++){const t=T[q*10+u];if(!t||bad[q*10+u])continue;const dd=len(sub(pl(mid3(t.m,t.d)),mid));if(dd<last-1.5)bad[q*10+u]=bad[q*10+u]||'out of order along the arch';else last=Math.max(last,dd)}}
+  return bad}
+
 async function autoMeasure(){if(!origP.upper&&!origP.lower)return toast('Upload the upper and/or lower scan first');if(!lsGet('oa-claude-key')&&!(await askKey()))return;
   if(lsGet('oa-ai-ok3d')!=='1'){if(!confirm('Auto-measure sends a picture of each dental model (no name or other details) from this device to Claude AI (Anthropic). Continue?'))return;lsSet('oa-ai-ok3d','1')}
   const btn=$('#mAuto');btn.disabled=true;const done=[];cur.models.auto=cur.models.auto||{};
@@ -1304,7 +1333,7 @@ async function autoMeasure(){if(!origP.upper&&!origP.lower)return toast('Upload 
         teeth[t.fdi]={m:lvl(shot.toWorld(t.mesial.x,t.mesial.y)),d:lvl(shot.toWorld(t.distal.x,t.distal.y)),c,conf:t.confidence}}
       if(!Object.keys(teeth).length)throw new Error('no teeth were found on the '+side+' model');
       {const P=origP[side],st=Math.max(1,Math.floor(P.length/3/50000));let sv=0,nv=0;for(let i=0;i<P.length;i+=3*st){sv+=(P[i]-F.c[0])*F.e3[0]+(P[i+1]-F.c[1])*F.e3[1]+(P[i+2]-F.c[2])*F.e3[2];nv++}const cs=Object.values(teeth).filter(t=>t.c).map(t=>d3(v3(t.c,F.c,-1),F.e3));if(cs.length&&cs.reduce((a,b)=>a+b,0)/cs.length<sv/nv)F=flipFrame(F)}
-      cur.models.auto[side]={frame:F,teeth,note:res.note||'',at:Date.now()};applyMetrics(side);done.push(`${side}: ${Object.keys(teeth).length} teeth`)}
+      F=frameFromTeeth(F,teeth,side);cur.models.auto[side]={frame:F,teeth,note:res.note||'',at:Date.now()};applyMetrics(side);done.push(`${side}: ${Object.keys(teeth).length} teeth`)}
     saveNow();toast('Measured '+done.join(', ')+' — check the widths and points; edit any value straight away')}
   catch(e){toast('Auto-measure failed: '+(e.message==='Failed to fetch'?'could not reach Claude AI':e.message))}
   finally{btn.disabled=false;btn.textContent='✨ Auto-measure teeth';$('#mHint').hidden=true;showToothMarks();renderAutoInfo();renderPlanner()}}
@@ -1427,10 +1456,14 @@ function curveTable(x0,Y0,D,p,Xm,side,offFn){const pts=[];for(let t=0;t<=Xm+30;t
   let P=pts;if(offFn)P=pts.map((q,i)=>{const[nx,ny]=nrm2(i),o=offFn(Math.abs(q[0]-x0));return[q[0]+nx*o,q[1]+ny*o]});
   const S=[0];for(let i=1;i<P.length;i++)S.push(S[i-1]+Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]));
   return{at(u){let i=S.findIndex(s=>s>=u);if(i<0)i=S.length-1;if(i===0)i=1;const f=(u-S[i-1])/((S[i]-S[i-1])||1),a=P[i-1],b=P[i];let tx=b[0]-a[0],ty=b[1]-a[1];const l=Math.hypot(tx,ty)||1;tx/=l;ty/=l;let nx=-ty,ny=tx;if(nx*side<0){nx=-nx;ny=-ny}return{p:[a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f],t:[tx,ty],n:[nx,ny]}}}}
-function buildSetup(pat,sim){const A=cur.models.auto||{},sides=['lower','upper'].filter(s=>A[s]&&origP[s]);if(!sides.length)return null;
+function buildSetup(pat,sim){let r=buildSetupRaw(pat,sim,0);if(r&&r.dev&&r.dev.n){const d=r.dev,dl=Math.max(2-SETUP.oj,Math.min(4-SETUP.oj,-(1.5*d.c+1*d.m)/(2+1.5+1)));if(Math.abs(dl)>0.2){r=buildSetupRaw(pat,sim,dl);r.delta=dl}}return r}
+function buildSetupRaw(pat,sim,delta){const A0=cur.models.auto||{},sides=['lower','upper'].filter(s=>A0[s]&&origP[s]);if(!sides.length)return null;
+  const A={};for(const s of['lower','upper'])if(A0[s]){A[s]={...A0[s],frame:frameFromTeeth(A0[s].frame,A0[s].teeth,s)};const bad=checkTeeth(s)||{};A[s].bad=bad}
   const G=A.lower?A.lower.frame:{...A.upper.frame,e3:A.upper.frame.e3.map(x=>-x),e1:n3(x3(A.upper.frame.e2,A.upper.frame.e3.map(x=>-x)))},g=p=>{const d=[p[0]-G.c[0],p[1]-G.c[1],p[2]-G.c[2]];return[d3(d,G.e1),d3(d,G.e2),d3(d,G.e3)]},wp=q=>v3(v3(v3(G.c,G.e1,q[0]),G.e2,q[1]),G.e3,q[2]);
   const flatW=(T)=>{const d=v3(T.d,T.m,-1);return Math.hypot(d3(d,G.e1),d3(d,G.e2))},W=(t)=>num(cur.w[t])??(A.lower&&A.lower.teeth[t]?flatW(A.lower.teeth[t]):A.upper&&A.upper.teeth[t]?flatW(A.upper.teeth[t]):AVG_W[t]);
   const ext=new Set([...pat.U,...pat.L]),res={meshes:{},notes:[]};
+  for(const s of sides){const b=Object.keys(A[s].bad);if(b.length)res.notes.push(`${s} teeth left out (detection looks wrong): ${b.join(', ')} — open 🔎 Check detection`);if(Object.keys(A[s].teeth).length-b.length<8){res.notes.push(`Too few reliable ${s} teeth for a set-up — open 🔎 Check detection and run ✨ Auto-measure again`);res.fail=true}}
+  if(res.fail)return res;
   const cuspG=(side,k)=>{const t=A[side]&&A[side].teeth[k];return t&&t.c?g(t.c):null};
   const ref=A.lower?'lower':'upper',R=ref==='lower'?[41,31,43,33,46,36]:[11,21,13,23,16,26];const ci=R.map(k=>cuspG(ref,k));
   const mid2=ci[0]&&ci[1]?[(ci[0][0]+ci[1][0])/2,(ci[0][1]+ci[1][1])/2]:null;if(!mid2){res.notes.push('Central incisors were not found — run ✨ Auto-measure again');return res}
@@ -1444,8 +1477,8 @@ function buildSetup(pat,sim){const A=cur.models.auto||{},sides=['lower','upper']
     for(const sgn of[1,-1]){// each half of the arch, from the midline backwards
       const qd=isU?(sgn===1?1:2):(sgn===1?4:3),sideSign=(()=>{const c=cuspG(side,qd*10+6)||cuspG(side,qd*10+3)||cuspG(side,qd*10+1);return c?Math.sign(c[0]-x0)||sgn:sgn})();
       const lowerApex=Y0,apexY=isU&&A.lower?lowerApex+SETUP.oj+0.5:lowerApex,off=isU&&A.lower?(t=>t<icw/2?SETUP.oj+0.5-(SETUP.oj+0.5-SETUP.buccalOJ)*(t/(icw/2)):SETUP.buccalOJ):null;
-      const C=curveTable(x0,isU&&A.lower?Y0:apexY,arch.D,arch.p,arch.Xm,sideSign,off);let u=0;
-      for(let uu=1;uu<=7;uu++){const k=qd*10+uu;if(ext.has(k))continue;const T=A[side].teeth[k],tri=tris[k];if(!T||!tri||!T.c)continue;const w=W(k),a0=C.at(u).p;let lo=u,hi=u+2*w;for(let it=0;it<40;it++){const m=(lo+hi)/2,q=C.at(m).p;Math.hypot(q[0]-a0[0],q[1]-a0[1])<w?lo=m:hi=m}
+      const C=curveTable(x0,(isU&&A.lower?Y0:apexY)+(isU&&A.lower?delta:0),arch.D,arch.p,arch.Xm,sideSign,off);let u=0;
+      for(let uu=1;uu<=7;uu++){const k=qd*10+uu;if(ext.has(k))continue;const T=A[side].teeth[k],tri=tris[k];if(!T||!tri||!T.c||A[side].bad[k])continue;const w=W(k),a0=C.at(u).p;let lo=u,hi=u+2*w;for(let it=0;it<40;it++){const m=(lo+hi)/2,q=C.at(m).p;Math.hypot(q[0]-a0[0],q[1]-a0[1])<w?lo=m:hi=m}
         const a1=C.at(hi).p,cl=Math.hypot(a1[0]-a0[0],a1[1]-a0[1])||1,mn=C.at((u+hi)/2),at={p:[(a0[0]+a1[0])/2,(a0[1]+a1[1])/2],t:[(a1[0]-a0[0])/cl,(a1[1]-a0[1])/cl],n:mn.n};const uStart=u;u=hi;
         const zT=isU&&A.lower?h0-(uu<=2?SETUP.ob:uu===3?2:1):h0,target=wp([at.p[0],at.p[1],zT]);
         const tang3=n3(v3(v3([0,0,0],G.e1,at.t[0]),G.e2,at.t[1])),norm3=n3(v3(v3([0,0,0],G.e1,at.n[0]),G.e2,at.n[1]));
@@ -1460,10 +1493,12 @@ function buildSetup(pat,sim){const A=cur.models.auto||{},sides=['lower','upper']
         const P=origP[side],st0=out.length;for(const i of tri)for(let j=0;j<9;j+=3){const r=mv3(Rm,[P[i+j]-piv[0],P[i+j+1]-piv[1],P[i+j+2]-piv[2]]);out.push(r[0]+tgt[0],r[1]+tgt[1],r[2]+tgt[2])}
         placed[k]=Object.assign(placed[k]||{},{u0:uStart,u1:u,cusp:[at.p[0],at.p[1],zT],y:at.p[1],mes:a0,dis:a1,range:[st0,out.length],target,Zinc,norm3,tang3,nm:v3(mv3(Rm,v3(T.m,piv,-1)),tgt),nd:v3(mv3(Rm,v3(T.d,piv,-1)),tgt),nc:v3(rc,tgt)})}}
     res.meshes[side]=new Float32Array(out);res[side]=placed}
+  res.dev={c:0,m:0,n:0};const dv={c:[],m:[]};
   if(res.upper&&res.lower){const L=res.lower,U=res.upper;for(const[qU,qL,nm]of[[1,4,'right'],[2,3,'left']]){const u6=U[qU*10+6],l6=L[qL*10+6],u3=U[qU*10+3],l3=L[qL*10+3];
-      if(u6&&l6){const groove=[l6.mes[0]+(l6.dis[0]-l6.mes[0])*0.45,l6.mes[1]+(l6.dis[1]-l6.mes[1])*0.45],cuspU=[u6.mes[0]+(u6.dis[0]-u6.mes[0])*0.25,u6.mes[1]+(u6.dis[1]-u6.mes[1])*0.25],dy=cuspU[1]-groove[1];
+      if(u6&&l6){const groove=[l6.mes[0]+(l6.dis[0]-l6.mes[0])*0.45,l6.mes[1]+(l6.dis[1]-l6.mes[1])*0.45],cuspU=[u6.mes[0]+(u6.dis[0]-u6.mes[0])*0.25,u6.mes[1]+(u6.dis[1]-u6.mes[1])*0.25],dy=cuspU[1]-groove[1];dv.m.push(dy);
         res.notes.push(`${nm} molars ${Math.abs(dy)<=1?'Class I':dy>0?'Class II by '+r1(dy)+' mm':'Class III by '+r1(-dy)+' mm'}`)}
-      if(u3&&l3){const dy=u3.cusp[1]-l3.dis[1];res.notes.push(`${nm} canines ${Math.abs(dy)<=1?'Class I':dy>0?'Class II by '+r1(dy)+' mm':'Class III by '+r1(-dy)+' mm'}`)}}}
+      if(u3&&l3){const dy=u3.cusp[1]-l3.dis[1];dv.c.push(dy);res.notes.push(`${nm} canines ${Math.abs(dy)<=1?'Class I':dy>0?'Class II by '+r1(dy)+' mm':'Class III by '+r1(-dy)+' mm'}`)}}}
+  const av=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;res.dev={c:av(dv.c),m:av(dv.m),n:dv.c.length+dv.m.length};res.oj=SETUP.oj+delta;
   return res}
 
 function showExtraction(mode){extView=mode;for(const b of $$('#extViews button'))b.setAttribute('aria-pressed',b.dataset.v===mode);clearSeg();
@@ -1471,7 +1506,7 @@ function showExtraction(mode){extView=mode;for(const b of $$('#extViews button')
   const pat=PATTERNS.find(p=>p.id===(cur.plan.extPat||'4s'))||PATTERNS[1],sim=simulate(cur,pat,{anch:cur.plan.anchSim||'mod',lips:cur.plan.lipSim||'average'});let miss=[];
   if(mode==='setup'){const S=buildSetup(pat,sim);if(!S){$('#extNote').textContent='Run ✨ Auto-measure teeth first so each tooth can be found on the models.';return}
     for(const side of['upper','lower']){if(!origP[side])continue;if(S.meshes[side]&&S.meshes[side].length)mesh.set(side,S.meshes[side],COLORS[side]);else mesh.set(side,origP[side],COLORS[side])}showToothMarks();
-    const ar=S.arch;$('#extNote').innerHTML=ar?`<b>Final set-up — ${esc(pat.name)}</b>: every crown placed on an ideal arch (keeps inter-canine ${r1(ar.icw)} mm and inter-molar ${r1(ar.imw)} mm), curve of Spee levelled, incisors ${ar.move>0?r1(ar.move)+' mm back':ar.move<0?r1(-ar.move)+' mm forward':'in place'}${S.upper&&S.lower?`, overjet ${SETUP.oj} mm, overbite ${SETUP.ob} mm, upper buccal cusps ${SETUP.buccalOJ} mm outside the lowers`:''}; front teeth tip and torque set to Andrews' norms. ${S.notes.length?'Result: '+esc(S.notes.join(' · '))+'.':''}<div class="note">Crowns only (gums hidden). A planning illustration from the measured widths — check against a lab or software set-up before treatment.</div>`:esc(S.notes.join(' '));return}
+    const ar=S.arch;$('#extNote').innerHTML=ar?`<b>Final set-up — ${esc(pat.name)}</b>: every crown placed on an ideal arch (keeps inter-canine ${r1(ar.icw)} mm and inter-molar ${r1(ar.imw)} mm), curve of Spee levelled, incisors ${ar.move>0?r1(ar.move)+' mm back':ar.move<0?r1(-ar.move)+' mm forward':'in place'}${S.upper&&S.lower?`, overjet ${r1(S.oj??SETUP.oj)} mm${S.delta?` (upper arch moved ${S.delta>0?'forward':'back'} ${r1(Math.abs(S.delta))} mm to bring canines and molars closer to Class I — Andrews' first key)`:''}, overbite ${SETUP.ob} mm, upper buccal cusps ${SETUP.buccalOJ} mm outside the lowers`:''}; front teeth tip and torque set to Andrews' norms. ${S.notes.length?'Result: '+esc(S.notes.join(' · '))+'.':''}<div class="note">Crowns only (gums hidden). A planning illustration from the measured widths — check against a lab or software set-up before treatment.</div>`:esc(S.notes.join(' '));return}
   for(const side of['upper','lower']){if(!origP[side])continue;const teeth=side==='upper'?pat.U:pat.L;if(mode==='before'||!teeth.length){mesh.set(side,origP[side],COLORS[side]);continue}
     const P=deformArch(side,teeth);if(!P){miss.push(side);mesh.set(side,origP[side],COLORS[side]);continue}mesh.set(side,P,COLORS[side])}
   showToothMarks();$('#extNote').textContent=miss.length?'Run ✨ Auto-measure teeth first so the teeth can be located on the '+miss.join(' and ')+' model.':mode==='before'?'':`${pat.name}: crowns removed (${[...pat.U,...pat.L].join(', ')}).`}
