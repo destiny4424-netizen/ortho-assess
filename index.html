@@ -278,6 +278,9 @@ dialog::backdrop{background:#000a}
     <button class="btn sm" id="tglL" aria-pressed="true">Lower</button>
     <select class="btn sm" id="mView" aria-label="View"><option value="">View…</option><option value="front">Front</option><option value="top">From above</option><option value="bottom">From below</option><option value="right">Right side</option><option value="left">Left side</option><option value="back">Back</option></select>
     <button class="btn sm" id="mFit">Fit</button>
+    <button class="btn sm" id="mRoots" aria-pressed="false" title="Show roots (needs ✨ Auto-measure)">🦷 Roots</button>
+    <button class="btn sm" id="mBase" aria-pressed="false" title="Add a flat study-model base">▭ Base</button>
+    <button class="btn sm" id="mSTL" title="Download what is shown as STL">⬇ STL</button>
     <span class="muted">|</span>
     <button class="btn sm" id="mDist" aria-pressed="false">📏 Distance</button>
     <button class="btn sm" id="mPoly" aria-pressed="false">〰 Arch length</button>
@@ -1140,18 +1143,18 @@ class MeshView{
     const gl=this.gl=cv.getContext('webgl',{antialias:true,preserveDrawingBuffer:true});if(!gl){this.fail=true;return}
     const sh=(t,s)=>{const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);return o};const pr=this.pr=gl.createProgram();
     gl.attachShader(pr,sh(gl.VERTEX_SHADER,'attribute vec3 p;attribute vec3 n;uniform mat4 M;varying vec3 vn;void main(){vn=n;gl_Position=M*vec4(p,1.0);}'));
-    gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,'precision mediump float;varying vec3 vn;uniform vec3 L;uniform vec3 C;void main(){float d=abs(dot(normalize(vn),L));gl_FragColor=vec4(C*(0.3+0.7*d)+vec3(0.2)*pow(d,30.0),1.0);}'));
-    gl.linkProgram(pr);gl.useProgram(pr);this.aP=gl.getAttribLocation(pr,'p');this.aN=gl.getAttribLocation(pr,'n');this.uM=gl.getUniformLocation(pr,'M');this.uL=gl.getUniformLocation(pr,'L');this.uC=gl.getUniformLocation(pr,'C');
+    gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,'precision mediump float;varying vec3 vn;uniform vec3 L;uniform vec3 C;uniform float A;void main(){float d=abs(dot(normalize(vn),L));gl_FragColor=vec4(C*(0.3+0.7*d)+vec3(0.2)*pow(d,30.0),A);}'));
+    gl.linkProgram(pr);gl.useProgram(pr);this.aP=gl.getAttribLocation(pr,'p');this.aN=gl.getAttribLocation(pr,'n');this.uM=gl.getUniformLocation(pr,'M');this.uL=gl.getUniformLocation(pr,'L');this.uC=gl.getUniformLocation(pr,'C');this.uA=gl.getUniformLocation(pr,'A');this.hide={};
     new ResizeObserver(()=>this.resize()).observe(stage);
     cv.addEventListener('pointerdown',e=>this.down(e));cv.addEventListener('pointermove',e=>this.move(e));cv.addEventListener('pointerup',e=>this.up(e));cv.addEventListener('pointercancel',e=>this.up(e));
     cv.addEventListener('wheel',e=>{e.preventDefault();this.d*=Math.exp(e.deltaY*0.0012);this.render()},{passive:false});cv.addEventListener('contextmenu',e=>e.preventDefault())}
   clear(){for(const k in this.meshes)this.remove(k);this.marks=[];this.render()}
   remove(k){const m=this.meshes[k];if(!m)return;this.gl.deleteBuffer(m.bp);this.gl.deleteBuffer(m.bn);delete this.meshes[k]}
-  set(k,P,color){if(this.fail)return;this.remove(k);const gl=this.gl,N=new Float32Array(P.length);const mn=[1e9,1e9,1e9],mx=[-1e9,-1e9,-1e9];
+  set(k,P,color,o={}){if(this.fail)return;this.remove(k);const gl=this.gl,N=new Float32Array(P.length);const mn=[1e9,1e9,1e9],mx=[-1e9,-1e9,-1e9];
     for(let i=0;i<P.length;i+=9){const ax=P[i+3]-P[i],ay=P[i+4]-P[i+1],az=P[i+5]-P[i+2],bx=P[i+6]-P[i],by=P[i+7]-P[i+1],bz=P[i+8]-P[i+2];let nx=ay*bz-az*by,ny=az*bx-ax*bz,nz=ax*by-ay*bx;const l=Math.hypot(nx,ny,nz)||1;nx/=l;ny/=l;nz/=l;
       for(let k=0;k<9;k+=3){N[i+k]=nx;N[i+k+1]=ny;N[i+k+2]=nz;for(let c=0;c<3;c++){const v=P[i+k+c];if(v<mn[c])mn[c]=v;if(v>mx[c])mx[c]=v}}}
     const bp=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,bp);gl.bufferData(gl.ARRAY_BUFFER,P,gl.STATIC_DRAW);const bn=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,bn);gl.bufferData(gl.ARRAY_BUFFER,N,gl.STATIC_DRAW);
-    this.meshes[k]={P,bp,bn,n:P.length/3,color,mn,mx,vis:true};this.fit()}
+    this.meshes[k]={P,bp,bn,n:P.length/3,color,mn,mx,alpha:o.alpha??1,vis:!this.hide[(k.match(/upper|lower/)||[])[0]]};this.fit()}
   fit(){const ms=Object.values(this.meshes);if(!ms.length)return this.render();const mn=[0,1,2].map(c=>Math.min(...ms.map(m=>m.mn[c]))),mx=[0,1,2].map(c=>Math.max(...ms.map(m=>m.mx[c])));
     this.t=mn.map((v,c)=>(v+mx[c])/2);this.diag=dist3(mn,mx);this.d=this.diag/2/Math.tan(this.fov/2)*1.05;this.render()}
   view(name){this.R={front:[1,0,0,0,1,0,0,0,1],back:ry(Math.PI),right:ry(-Math.PI/2),left:ry(Math.PI/2),top:rx(Math.PI/2),bottom:rx(-Math.PI/2)}[name];this.render()}
@@ -1163,8 +1166,8 @@ class MeshView{
   render(){if(this.fail||!this.cv.width)return;cancelAnimationFrame(this.raf);this.raf=requestAnimationFrame(()=>this.paint())}
   paint(){const gl=this.gl;gl.viewport(0,0,this.cv.width,this.cv.height);gl.clearColor(0.043,0.059,0.078,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);
     gl.uniformMatrix4fv(this.uM,false,new Float32Array(this.mvp()));const L=RT(this.R,[0.25,0.35,1]),l=Math.hypot(...L);gl.uniform3f(this.uL,L[0]/l,L[1]/l,L[2]/l);
-    for(const m of Object.values(this.meshes)){if(!m.vis)continue;gl.uniform3fv(this.uC,m.color);gl.bindBuffer(gl.ARRAY_BUFFER,m.bp);gl.enableVertexAttribArray(this.aP);gl.vertexAttribPointer(this.aP,3,gl.FLOAT,false,0,0);
-      gl.bindBuffer(gl.ARRAY_BUFFER,m.bn);gl.enableVertexAttribArray(this.aN);gl.vertexAttribPointer(this.aN,3,gl.FLOAT,false,0,0);gl.drawArrays(gl.TRIANGLES,0,m.n)}
+    const ms=Object.values(this.meshes).filter(m=>m.vis),draw=m=>{gl.uniform1f(this.uA,m.alpha);gl.uniform3fv(this.uC,m.color);gl.bindBuffer(gl.ARRAY_BUFFER,m.bp);gl.enableVertexAttribArray(this.aP);gl.vertexAttribPointer(this.aP,3,gl.FLOAT,false,0,0);
+      gl.bindBuffer(gl.ARRAY_BUFFER,m.bn);gl.enableVertexAttribArray(this.aN);gl.vertexAttribPointer(this.aN,3,gl.FLOAT,false,0,0);gl.drawArrays(gl.TRIANGLES,0,m.n)};for(const m of ms)if(m.alpha>=1)draw(m);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);for(const m of ms)if(m.alpha<1)draw(m);gl.depthMask(true);gl.disable(gl.BLEND);
     this.overlay()}
   proj(p){const v=Rv(this.R,[p[0]-this.t[0],p[1]-this.t[1],p[2]-this.t[2]]);v[2]-=this.d;if(v[2]>=0)return null;const w=this.cv.width,h=this.cv.height,f=Math.tan(this.fov/2),a=w/h;return[((v[0]/-v[2])/(f*a)+1)/2*w,(1-(v[1]/-v[2])/f)/2*h]}
   overlay(){const c=this.oc,d=window.devicePixelRatio||1;c.clearRect(0,0,this.ov.width,this.ov.height);const pts=this.marks.map(p=>this.proj(p));
@@ -1440,12 +1443,95 @@ function segmentArch(side){const A=cur.models.auto&&cur.models.auto[side],P=orig
       kap=((N[w*3]-nx)*dx+(N[w*3+1]-ny)*dy+(N[w*3+2]-nz)*dz)/L2,c=c0+L*(1+SEGP.k*Math.max(0,-kap)*L);if(c<cost[w]){cost[w]=c;lab[w]=lab[v];push(c,w)}}}
   for(let i=0;i<n;i++)if(lab[i]>0&&H(i)<hc[lab[i]]-12.5)lab[i]=0;// no crown goes deeper than a crown can be
   const out=new Int32Array(nt);for(let t=0;t<nt;t++){const a=lab[T[t*3]],b=lab[T[t*3+1]],c=lab[T[t*3+2]];out[t]=a===b||a===c?a:b===c?b:0}
-  segCache[side]={key,lab:out};return out}
+  const vk=new Int32Array(n),vg=new Uint8Array(n);for(let t=0;t<nt;t++)for(let j=0;j<3;j++){const v=T[t*3+j];if(out[t]>0)vk[v]=out[t];else vg[v]=1}
+  const cerv={};for(let i=0;i<n;i++)if(vk[i]>0&&vg[i])(cerv[vk[i]]=cerv[vk[i]]||[]).push([V[i*3],V[i*3+1],V[i*3+2]]);
+  segCache[side]={key,lab:out,F,cerv};return out}
 const SEG_COLORS=[[0.95,0.55,0.55],[0.55,0.8,0.95],[0.6,0.9,0.6],[0.95,0.85,0.5],[0.8,0.6,0.95],[0.5,0.9,0.85],[0.95,0.7,0.45]];
 function clearSeg(){for(const k of Object.keys(mesh.meshes))if(k.startsWith('seg'))mesh.remove(k)}
 function showSegmentation(){let any=false;for(const side of['upper','lower']){if(!origP[side])continue;const L=segmentArch(side);if(!L){mesh.set(side,origP[side],COLORS[side]);continue}any=true;
   const P=origP[side],parts={};for(let t=0;t<L.length;t++)(parts[L[t]]=parts[L[t]]||[]).push(t);mesh.remove(side);
   for(const k in parts){const a=new Float32Array(parts[k].length*9);parts[k].forEach((t,i)=>a.set(P.subarray(t*9,t*9+9),i*9));mesh.set('seg'+side+k,a,+k?SEG_COLORS[(+k)%SEG_COLORS.length]:[0.55,0.45,0.48])}}return any}
+
+/* ---------- roots and model base ----------
+   Intra-oral scans have crowns and gum only. Roots are built from each crown's gum line downwards along the crown's
+   long axis, with average root lengths and root numbers from dental anatomy (Wheeler's Dental Anatomy averages). */
+const ROOT_LEN={u:{1:13,2:13,3:17,4:14,5:14,6:12.5,7:11.5},l:{1:12.5,2:14,3:16,4:14,5:14.5,6:14,7:13}};
+// teeth with more than one root: trunk = depth (mm) where the roots split; each root = [mesio-distal offset (+ = distal), bucco-lingual offset (+ = buccal), md radius, bl radius, length factor]
+const ROOT_FORM={u:{4:{trunk:6,r:[[0,0.45,0.8,0.5,1],[0,-0.45,0.8,0.5,0.95]]},6:{trunk:4,r:[[-0.45,0.4,0.45,0.45,0.95],[0.45,0.4,0.4,0.4,0.9],[0,-0.5,0.5,0.5,1.05]]},7:{trunk:4.5,r:[[-0.4,0.35,0.45,0.45,0.95],[0.4,0.35,0.4,0.4,0.9],[0,-0.45,0.5,0.5,1]]}},
+  l:{6:{trunk:3,r:[[-0.5,0,0.45,0.85,1],[0.5,0,0.4,0.8,0.95]]},7:{trunk:3.5,r:[[-0.4,0,0.45,0.85,1],[0.4,0,0.4,0.8,0.95]]}}};
+const ROOT_COLOR=[0.93,0.8,0.58],GUM_COLOR=[0.86,0.55,0.58],BASE_COLOR=[0.88,0.89,0.92];
+let rootsOn=false,baseOn=false;const baseCache={};
+const rootTaper=t=>Math.sqrt(Math.max(0,1-t*t))*(1-0.55*t);// rounded apex
+function loft(rings,apex,out){const NS=rings[0].length;for(let r=0;r+1<rings.length;r++)for(let s=0;s<NS;s++){const a=rings[r][s],b=rings[r][(s+1)%NS],c=rings[r+1][(s+1)%NS],d=rings[r+1][s];out.push(...a,...b,...c,...a,...c,...d)}
+  const L=rings[rings.length-1];for(let s=0;s<NS;s++)out.push(...L[s],...L[(s+1)%NS],...apex)}
+function toothRoots(side){if(!segmentArch(side))return null;const S=segCache[side];if(S.roots)return S.roots;
+  const A=cur.models.auto[side],F=S.F,P=origP[side],tris=crownTris(side),arch=side==='upper'?'u':'l',out={},NS=24,K=10;
+  for(const k in tris){const u=k%10,T=A.teeth[k],Lr=ROOT_LEN[arch][u];if(!T||!Lr)continue;
+    const ps=[];for(const i of tris[k])for(let j=0;j<9;j+=3)ps.push([P[i+j],P[i+j+1],P[i+j+2]]);if(ps.length<30)continue;
+    const cc=ps.reduce((a,p)=>v3(a,p,1/ps.length),[0,0,0]);let z=F.e3;
+    if(u<=5){const C=[[0,0,0],[0,0,0],[0,0,0]];for(const p of ps){const d=v3(p,cc,-1);for(let a=0;a<3;a++)for(let b=0;b<3;b++)C[a][b]+=d[a]*d[b]}
+      const ax=jacobi3(C)[0].vec;if(Math.abs(d3(ax,F.e3))>0.75)z=n3(d3(ax,F.e3)<0?ax.map(x=>-x):ax)}
+    let x=v3(T.d,T.m,-1);x=v3(x,z,-d3(x,z));if(Math.hypot(...x)<1e-6)continue;x=n3(x);let y=x3(z,x);const out2=v3(cc,F.c,-1);if(d3(y,v3(out2,F.e3,-d3(out2,F.e3)))<0)y=y.map(v=>-v);// x distal, y buccal
+    const w=Math.hypot(...v3(T.d,T.m,-1)),hh=p=>d3(v3(p,cc,-1),z);let cv=S.cerv[k]||[];
+    if(cv.length<12){const hm=Math.min(...ps.map(hh));cv=ps.filter(p=>hh(p)<hm+1.5)}
+    {const hs=cv.map(hh).sort((a,b)=>a-b),hlo=hs[Math.floor(hs.length*0.1)];cv=cv.filter(p=>hh(p)<hlo+4)}
+    const c0=v3(cv.reduce((a,p)=>v3(a,p,1/cv.length),[0,0,0]),[0,0,0]),rad=new Array(NS).fill(0),hgt=new Array(NS).fill(null);
+    for(const p of cv){const d=v3(p,c0,-1),px=d3(d,x),py=d3(d,y),r=Math.hypot(px,py),s=((Math.round(Math.atan2(py,px)/(2*Math.PI)*NS)%NS)+NS)%NS;if(r>rad[s]){rad[s]=r;hgt[s]=d3(d,z)}}
+    const have=[...Array(NS).keys()].filter(s=>rad[s]>0);if(have.length<4)continue;
+    for(let s=0;s<NS;s++)if(!(rad[s]>0)){let a=s,b=s,da=0,db=0;while(!(rad[a]>0)){a=(a+NS-1)%NS;da++}while(!(rad[b]>0)){b=(b+1)%NS;db++}const f=da/(da+db);rad[s]=-(rad[a]*(1-f)+rad[b]*f);hgt[s]=hgt[a]*(1-f)+hgt[b]*f}
+    for(let s=0;s<NS;s++)rad[s]=Math.abs(rad[s]);
+    for(let it=0;it<2;it++){const r0=rad.slice(),h0=hgt.slice();for(let s=0;s<NS;s++){rad[s]=(r0[(s+NS-1)%NS]+2*r0[s]+r0[(s+1)%NS])/4;hgt[s]=(h0[(s+NS-1)%NS]+2*h0[s]+h0[(s+1)%NS])/4}}
+    for(let s=0;s<NS;s++)rad[s]=Math.max(0.2*w,Math.min(0.42*w,rad[s]))*0.96;
+    const ring=(c,t,sc,hk)=>[...Array(NS).keys()].map(s=>{const a=s/NS*2*Math.PI;return v3(v3(v3(c,x,Math.cos(a)*rad[s]*sc),y,Math.sin(a)*rad[s]*sc),z,hgt[s]*hk)});
+    const tri=[],form=ROOT_FORM[arch][u];
+    if(!form){const rings=[];for(let i=0;i<K;i++){const t=i/K;rings.push(ring(v3(c0,z,-t*Lr),t,rootTaper(t),(1-t)*(1-t)))}loft(rings,v3(c0,z,-Lr),tri)}
+    else{const tr=form.trunk,rings=[];for(let i=0;i<=4;i++){const t=i/4;rings.push(ring(v3(c0,z,-t*tr),t,1-0.12*t,(1-t)*(1-t)))}
+      loft(rings,v3(c0,z,-tr-0.5),tri);// trunk, closed under the split
+      const rx=(rad[0]+rad[NS/2])/2*0.88,ry=(rad[NS/4]+rad[3*NS/4])/2*0.88;
+      for(const[ox,oy,sx,sy,lf]of form.r){const len=Lr*lf-tr+1,off=v3(v3([0,0,0],x,ox*rx),y,oy*ry),sub=[];
+        for(let i=0;i<K;i++){const t=i/K,f=rootTaper(t),c=v3(v3(v3(c0,z,-(tr-1)-t*len),off,1+0.35*t),[0,0,0]);
+          sub.push([...Array(NS).keys()].map(s=>{const a=s/NS*2*Math.PI;return v3(v3(c,x,Math.cos(a)*sx*rx*f),y,Math.sin(a)*sy*ry*f)}))}
+        loft(sub,v3(v3(c0,z,-(tr-1)-len),off,1.35),tri)}}
+    out[k]=new Float32Array(tri)}
+  S.roots=out;return out}
+/* a flat study-model base: walls from the scan's open edge down to a slab shaped like the arch outline */
+function hull2(pts){pts=pts.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]);const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]),lo=[],up=[];
+  for(const p of pts){while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0)lo.pop();lo.push(p)}for(let i=pts.length-1;i>=0;i--){const p=pts[i];while(up.length>=2&&cr(up[up.length-2],up[up.length-1],p)<=0)up.pop();up.push(p)}
+  lo.pop();up.pop();return lo.concat(up)}
+function archBase(side){const P=origP[side];if(!P)return null;const A=cur.models.auto&&cur.models.auto[side],key=P.length+':'+(A?A.at:'');if(baseCache[side]&&baseCache[side].key===key)return baseCache[side];
+  const{V,T,n}=weldMesh(P),nt=T.length/3,E=new Map();
+  for(let t=0;t<nt;t++)for(let j=0;j<3;j++){const a=T[t*3+j],b=T[t*3+(j+1)%3];if(a===b)continue;const kk=a<b?a*n+b:b*n+a,e=E.get(kk);if(e)e.c++;else E.set(kk,{a,b,c:1})}
+  const bnd=[];for(const e of E.values())if(e.c===1)bnd.push(e);
+  if(bnd.length<20)return baseCache[side]={key,closed:true};
+  let c=[0,0,0];for(let i=0;i<n;i++)c=v3(c,[V[i*3],V[i*3+1],V[i*3+2]],1/n);let e1,e2,e3;
+  if(A&&A.frame){e1=A.frame.e1;e2=A.frame.e2;e3=A.frame.e3}else{const C=[[0,0,0],[0,0,0],[0,0,0]],st=Math.max(1,Math.floor(n/30000));for(let i=0;i<n;i+=st){const d=[V[i*3]-c[0],V[i*3+1]-c[1],V[i*3+2]-c[2]];for(let a=0;a<3;a++)for(let b=0;b<3;b++)C[a][b]+=d[a]*d[b]}const J=jacobi3(C);e1=J[0].vec;e2=J[1].vec;e3=J[2].vec}
+  const H=i=>(V[i*3]-c[0])*e3[0]+(V[i*3+1]-c[1])*e3[1]+(V[i*3+2]-c[2])*e3[2];
+  {let hb=0;for(const e of bnd)hb+=H(e.a);hb/=bnd.length;if(hb>0){e3=e3.map(v=>-v);e1=e1.map(v=>-v)}}// the open edge is on the gum side: the base goes there
+  let hmin=Infinity;for(let i=0;i<n;i++)hmin=Math.min(hmin,H(i));const htop=hmin-1,hbot=htop-10,out=[];
+  const drop=(i,h)=>{const p=[V[i*3],V[i*3+1],V[i*3+2]];return v3(p,e3,h-H(i))};
+  for(const e of bnd){const a=[V[e.a*3],V[e.a*3+1],V[e.a*3+2]],b=[V[e.b*3],V[e.b*3+1],V[e.b*3+2]],a2=drop(e.a,htop),b2=drop(e.b,htop);out.push(...a,...b,...b2,...a,...b2,...a2)}
+  const pl=[],st=Math.max(1,Math.floor(n/20000));for(let i=0;i<n;i+=st){const d=[V[i*3]-c[0],V[i*3+1]-c[1],V[i*3+2]-c[2]];pl.push([d3(d,e1),d3(d,e2)])}
+  let hl=hull2(pl);const rr=[];for(const p of hl)for(let a=0;a<12;a++)rr.push([p[0]+2.5*Math.cos(a*Math.PI/6),p[1]+2.5*Math.sin(a*Math.PI/6)]);hl=hull2(rr);
+  const W=(q,h)=>v3(v3(v3(c,e1,q[0]),e2,q[1]),e3,h),m=hl.reduce((a,q)=>[a[0]+q[0]/hl.length,a[1]+q[1]/hl.length],[0,0]);
+  for(let i=0;i<hl.length;i++){const p=hl[i],q=hl[(i+1)%hl.length];out.push(...W(m,htop),...W(p,htop),...W(q,htop),...W(m,hbot),...W(q,hbot),...W(p,hbot),...W(p,htop),...W(p,hbot),...W(q,hbot),...W(p,htop),...W(q,hbot),...W(q,htop))}
+  return baseCache[side]={key,mesh:new Float32Array(out)}}
+/* draw one arch: crowns (minus extracted teeth), see-through gum + roots when roots are on, base when on */
+function drawArch(side,removed){const P=origP[side];for(const p of['gum','roots','base'])mesh.remove(p+side);let note='';
+  const L=(removed.length||rootsOn)&&cur.models.auto&&cur.models.auto[side]?segmentArch(side):null;
+  if(rootsOn&&L){const cr=[],gm=[];for(let t=0;t<L.length;t++){const dst=L[t]>0?(removed.includes(L[t])?null:cr):gm;if(dst)for(let j=0;j<9;j++)dst.push(P[t*9+j])}
+    mesh.set(side,new Float32Array(cr),COLORS[side]);mesh.set('gum'+side,new Float32Array(gm),GUM_COLOR,{alpha:0.35});
+    const R=toothRoots(side)||{},rs=[];for(const k in R)if(!removed.includes(+k))for(const v of R[k])rs.push(v);if(rs.length)mesh.set('roots'+side,new Float32Array(rs),ROOT_COLOR)}
+  else{if(rootsOn)note='roots need ✨ Auto-measure teeth first';mesh.set(side,removed.length&&L?deformArch(side,removed):P,COLORS[side])}
+  if(baseOn){const B=archBase(side);if(B&&B.mesh)mesh.set('base'+side,B.mesh,BASE_COLOR,{alpha:rootsOn?0.4:1});else if(B&&B.closed)note=(note?note+'; ':'')+'this scan already has a base'}
+  return note}
+function setupRoots(side,placed){mesh.remove('roots'+side);if(!rootsOn||!placed)return;const R=toothRoots(side)||{},rs=[];
+  for(const k in placed){const q=placed[k],r=R[k];if(!r||!q.Rm)continue;for(let i=0;i<r.length;i+=3){const v=mv3(q.Rm,[r[i]-q.piv[0],r[i+1]-q.piv[1],r[i+2]-q.piv[2]]);rs.push(v[0]+q.tgt[0],v[1]+q.tgt[1],v[2]+q.tgt[2])}}
+  if(rs.length)mesh.set('roots'+side,new Float32Array(rs),ROOT_COLOR)}
+function downloadSTL(){let n=0;for(const side of['upper','lower']){const ms=Object.entries(mesh.meshes).filter(([k,m])=>m.vis&&(k===side||k.startsWith('gum'+side)||k.startsWith('roots'+side)||k.startsWith('base'+side)||k.startsWith('seg'+side)));if(!ms.length)continue;
+    const nt=ms.reduce((a,[,m])=>a+m.P.length/9,0),buf=new ArrayBuffer(84+50*nt),dv=new DataView(buf);dv.setUint32(80,nt,true);let o=84;
+    for(const[,m]of ms){const P=m.P;for(let i=0;i<P.length;i+=9){o+=12;for(let j=0;j<9;j++){dv.setFloat32(o,P[i+j],true);o+=4}o+=2}}
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([buf],{type:'model/stl'}));a.download=(cur.pt.name||'case').replace(/[^\w-]+/g,'_')+'-'+side+'-'+extView+'.stl';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);n++}
+  if(!n)toast('Upload a model first')}
 
 function crownTris(side){const L=segmentArch(side);if(!L)return null;const out={};for(let t=0;t<L.length;t++)if(L[t]>0)(out[L[t]]=out[L[t]]||[]).push(t*9);return out}
 function solveArch(sumC,sumM,icw,imw){// y = -D (t/Xm)^p, t = distance from the midline; fit arc lengths to the canine and the first molar
@@ -1491,7 +1577,7 @@ function buildSetupRaw(pat,sim,delta){const A0=cur.models.auto||{},sides=['lower
             const tip=Math.atan2(d3(ax,mes),d3(ax,Zinc)),Rp=rotK(x3(Zinc,mes),tipT/DEG-tip);Rm=mm3(Rp,mm3(Rt,Rm));placed[k]={tor:torT,tip:tipT}}}
         const piv=mid3(T.m,T.d),rc=mv3(Rm,v3(T.c,piv,-1)),tgt=v3(v3(target,G.e3,-d3(rc,G.e3)),[0,0,0]);
         const P=origP[side],st0=out.length;for(const i of tri)for(let j=0;j<9;j+=3){const r=mv3(Rm,[P[i+j]-piv[0],P[i+j+1]-piv[1],P[i+j+2]-piv[2]]);out.push(r[0]+tgt[0],r[1]+tgt[1],r[2]+tgt[2])}
-        placed[k]=Object.assign(placed[k]||{},{u0:uStart,u1:u,cusp:[at.p[0],at.p[1],zT],y:at.p[1],mes:a0,dis:a1,range:[st0,out.length],target,Zinc,norm3,tang3,nm:v3(mv3(Rm,v3(T.m,piv,-1)),tgt),nd:v3(mv3(Rm,v3(T.d,piv,-1)),tgt),nc:v3(rc,tgt)})}}
+        placed[k]=Object.assign(placed[k]||{},{Rm,piv,tgt,u0:uStart,u1:u,cusp:[at.p[0],at.p[1],zT],y:at.p[1],mes:a0,dis:a1,range:[st0,out.length],target,Zinc,norm3,tang3,nm:v3(mv3(Rm,v3(T.m,piv,-1)),tgt),nd:v3(mv3(Rm,v3(T.d,piv,-1)),tgt),nc:v3(rc,tgt)})}}
     res.meshes[side]=new Float32Array(out);res[side]=placed}
   res.dev={c:0,m:0,n:0};const dv={c:[],m:[]};
   if(res.upper&&res.lower){const L=res.lower,U=res.upper;for(const[qU,qL,nm]of[[1,4,'right'],[2,3,'left']]){const u6=U[qU*10+6],l6=L[qL*10+6],u3=U[qU*10+3],l3=L[qL*10+3];
@@ -1501,15 +1587,15 @@ function buildSetupRaw(pat,sim,delta){const A0=cur.models.auto||{},sides=['lower
   const av=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;res.dev={c:av(dv.c),m:av(dv.m),n:dv.c.length+dv.m.length};res.oj=SETUP.oj+delta;
   return res}
 
-function showExtraction(mode){extView=mode;for(const b of $$('#extViews button'))b.setAttribute('aria-pressed',b.dataset.v===mode);clearSeg();
-  if(mode==='seg'){$('#mHint').hidden=false;$('#mHint').textContent='Finding each tooth…';setTimeout(()=>{const ok=showSegmentation();$('#mHint').hidden=true;showToothMarks();$('#extNote').textContent=ok?'Each tooth in its own colour, gum in dark pink. If a crown is cut or includes gum, re-measure that tooth (its points steer the segmentation).':'Run ✨ Auto-measure teeth first.'},30);return}
+function showExtraction(mode){extView=mode;for(const b of $$('#extViews button'))b.setAttribute('aria-pressed',b.dataset.v===mode);clearSeg();for(const side of['upper','lower'])for(const p of['gum','roots','base'])mesh.remove(p+side);
+  if(mode==='seg'){$('#mHint').hidden=false;$('#mHint').textContent='Finding each tooth…';setTimeout(()=>{const ok=showSegmentation();if(baseOn)for(const side of['upper','lower']){const B=archBase(side);if(B&&B.mesh)mesh.set('base'+side,B.mesh,BASE_COLOR)}$('#mHint').hidden=true;showToothMarks();$('#extNote').textContent=ok?'Each tooth in its own colour, gum in dark pink. If a crown is cut or includes gum, re-measure that tooth (its points steer the segmentation).':'Run ✨ Auto-measure teeth first.'},30);return}
   const pat=PATTERNS.find(p=>p.id===(cur.plan.extPat||'4s'))||PATTERNS[1],sim=simulate(cur,pat,{anch:cur.plan.anchSim||'mod',lips:cur.plan.lipSim||'average'});let miss=[];
   if(mode==='setup'){const S=buildSetup(pat,sim);if(!S){$('#extNote').textContent='Run ✨ Auto-measure teeth first so each tooth can be found on the models.';return}
-    for(const side of['upper','lower']){if(!origP[side])continue;if(S.meshes[side]&&S.meshes[side].length)mesh.set(side,S.meshes[side],COLORS[side]);else mesh.set(side,origP[side],COLORS[side])}showToothMarks();
+    for(const side of['upper','lower']){if(!origP[side])continue;if(S.meshes[side]&&S.meshes[side].length)mesh.set(side,S.meshes[side],COLORS[side]);else mesh.set(side,origP[side],COLORS[side]);setupRoots(side,S[side])}showToothMarks();
     const ar=S.arch;$('#extNote').innerHTML=ar?`<b>Final set-up — ${esc(pat.name)}</b>: every crown placed on an ideal arch (keeps inter-canine ${r1(ar.icw)} mm and inter-molar ${r1(ar.imw)} mm), curve of Spee levelled, incisors ${ar.move>0?r1(ar.move)+' mm back':ar.move<0?r1(-ar.move)+' mm forward':'in place'}${S.upper&&S.lower?`, overjet ${r1(S.oj??SETUP.oj)} mm${S.delta?` (upper arch moved ${S.delta>0?'forward':'back'} ${r1(Math.abs(S.delta))} mm to bring canines and molars closer to Class I — Andrews' first key)`:''}, overbite ${SETUP.ob} mm, upper buccal cusps ${SETUP.buccalOJ} mm outside the lowers`:''}; front teeth tip and torque set to Andrews' norms. ${S.notes.length?'Result: '+esc(S.notes.join(' · '))+'.':''}<div class="note">Crowns only (gums hidden). A planning illustration from the measured widths — check against a lab or software set-up before treatment.</div>`:esc(S.notes.join(' '));return}
-  for(const side of['upper','lower']){if(!origP[side])continue;const teeth=side==='upper'?pat.U:pat.L;if(mode==='before'||!teeth.length){mesh.set(side,origP[side],COLORS[side]);continue}
-    const P=deformArch(side,teeth);if(!P){miss.push(side);mesh.set(side,origP[side],COLORS[side]);continue}mesh.set(side,P,COLORS[side])}
-  showToothMarks();$('#extNote').textContent=miss.length?'Run ✨ Auto-measure teeth first so the teeth can be located on the '+miss.join(' and ')+' model.':mode==='before'?'':`${pat.name}: crowns removed (${[...pat.U,...pat.L].join(', ')}).`}
+  const notes=[];for(const side of['upper','lower']){if(!origP[side])continue;const teeth=mode==='before'?[]:side==='upper'?pat.U:pat.L;if(teeth.length&&!(cur.models.auto&&cur.models.auto[side]))miss.push(side);
+    const nt=drawArch(side,miss.includes(side)?[]:teeth);if(nt)notes.push(side+': '+nt)}
+  showToothMarks();$('#extNote').textContent=(miss.length?'Run ✨ Auto-measure teeth first so the teeth can be located on the '+miss.join(' and ')+' model.':mode==='before'?'':`${pat.name}: crowns removed, with their roots (${[...pat.U,...pat.L].join(', ')}).`)+(notes.length?' ('+notes.join('; ')+')':'')+(rootsOn?' Roots are average lengths from dental anatomy, drawn from each crown\'s gum line along its long axis — an illustration, not a CBCT.':'')}
 function updExtButtons(){const ok=!!(cur.models.auto&&(cur.models.auto.upper||cur.models.auto.lower));for(const b of $$('#extViews button'))b.disabled=!ok&&b.dataset.v!=='before'}
 /* ---------- profile photo prediction ---------- */
 const PRED_PTS=[['Prn','Nose tip'],['Sn','Subnasale (under the nose)'],['Ls','Upper lip — most forward point'],['St','Stomion — where the lips meet'],['Li','Lower lip — most forward point'],['Sm','Labiomental fold (deepest point under the lower lip)'],['PogS','Soft-tissue chin — most forward point']];
@@ -1538,13 +1624,16 @@ const COLORS={upper:[0.93,0.86,0.72],lower:[0.78,0.84,0.93]};
 async function loadModel(side,file){try{$('#mEmpty').hidden=true;$('#mHint').hidden=false;$('#mHint').textContent='Loading '+side+' model…';
   let buf,name;if(file){buf=await file.arrayBuffer();name=file.name}else{const b=await DB.getBlob(cur.models[side].key);if(!b)throw new Error('File missing');buf=await b.arrayBuffer();name=cur.models[side].name}
   const P=parseModel(name,buf);if(file){const old=cur.models[side]&&cur.models[side].key;const k='b:'+uid();await DB.putBlob(k,file);cur.models[side]={key:k,name,tris:P.length/9};if(old)await DB.delBlob(old);save();updDots()}
-  origP[side]=P;delete segCache[side];mesh.set(side,P,COLORS[side]);$('#mHint').hidden=true;updMeshInfo();updExtButtons();showToothMarks()}catch(err){$('#mHint').hidden=true;toast('Could not open model: '+err.message);if(!Object.keys(mesh.meshes).length)$('#mEmpty').hidden=false}}
+  origP[side]=P;delete segCache[side];delete baseCache[side];mesh.set(side,P,COLORS[side]);$('#mHint').hidden=true;updMeshInfo();updExtButtons();showToothMarks()}catch(err){$('#mHint').hidden=true;toast('Could not open model: '+err.message);if(!Object.keys(mesh.meshes).length)$('#mEmpty').hidden=false}}
 function updMeshInfo(){const m=cur.models;$('#mEmpty').hidden=!mesh.fail&&!!(m.upper||m.lower);
   $('#mInfo').innerHTML=['upper','lower'].map(s=>`<div><b>${s==='upper'?'Upper':'Lower'}:</b> ${m[s]?esc(m[s].name)+' <span class="muted">('+(m[s].tris||0).toLocaleString()+' triangles)</span> <button class="btn sm danger" data-rm="'+s+'">Remove</button>':'not loaded'}</div>`).join('')}
 $('#mInfo').onclick=async e=>{const s=e.target.dataset.rm;if(!s)return;await DB.delBlob(cur.models[s].key);delete cur.models[s];delete origP[s];if(cur.models.auto)delete cur.models.auto[s];mesh.remove(s);mesh.render();save();updMeshInfo();updDots()};
 $('#upU').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)addModels([f],'upper')};
 $('#upL').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)addModels([f],'lower')};
-for(const[id,s]of[['tglU','upper'],['tglL','lower']])$('#'+id).onclick=e=>{const m=mesh.meshes[s];if(!m)return;m.vis=!m.vis;e.target.setAttribute('aria-pressed',m.vis);mesh.render()};
+for(const[id,s]of[['tglU','upper'],['tglL','lower']])$('#'+id).onclick=e=>{mesh.hide[s]=!mesh.hide[s];for(const k in mesh.meshes)if((k.match(/upper|lower/)||[])[0]===s)mesh.meshes[k].vis=!mesh.hide[s];e.target.setAttribute('aria-pressed',!mesh.hide[s]);mesh.render()};
+for(const[id,f]of[['mRoots','r'],['mBase','b']])$('#'+id).onclick=e=>{if(f==='r')rootsOn=!rootsOn;else baseOn=!baseOn;e.target.setAttribute('aria-pressed',f==='r'?rootsOn:baseOn);if(!origP.upper&&!origP.lower)return;
+  $('#mHint').hidden=false;$('#mHint').textContent=f==='r'?'Building roots…':'Building base…';setTimeout(()=>{try{showExtraction(extView)}finally{$('#mHint').hidden=true}},30)};
+$('#mSTL').onclick=downloadSTL;
 $('#mView').onchange=e=>{if(e.target.value)mesh.view(e.target.value);e.target.value=''};$('#mFit').onclick=()=>mesh.fit();
 let lastMeas=null;
 function setMode(m){mesh.mode=mesh.mode===m?null:m;mesh.marks=[];lastMeas=null;$('#mDist').setAttribute('aria-pressed',mesh.mode==='dist');$('#mPoly').setAttribute('aria-pressed',mesh.mode==='poly');$('#mDone').hidden=mesh.mode!=='poly';
