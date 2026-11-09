@@ -278,12 +278,8 @@ dialog::backdrop{background:#000a}
     <button class="btn sm" id="tglL" aria-pressed="true">Lower</button>
     <select class="btn sm" id="mView" aria-label="View"><option value="">View…</option><option value="front">Front</option><option value="top">From above</option><option value="bottom">From below</option><option value="right">Right side</option><option value="left">Left side</option><option value="back">Back</option></select>
     <button class="btn sm" id="mFit">Fit</button>
-    <button class="btn sm" id="mRoots" aria-pressed="false" title="Show roots (needs ✨ Auto-measure)">🦷 Roots</button>
-    <button class="btn sm" id="mBase" aria-pressed="false" title="Add a flat study-model base">▭ Base</button>
-    <button class="btn sm" id="mSTL" title="Download what is shown as STL">⬇ STL</button>
     <span class="muted">|</span>
     <button class="btn sm" id="mDist" aria-pressed="false">📏 Distance</button>
-    <button class="btn sm" id="mPoly" aria-pressed="false">〰 Arch length</button>
     <button class="btn sm" id="mClear">Clear marks</button>
   </div>
   <div class="split">
@@ -295,12 +291,12 @@ dialog::backdrop{background:#000a}
     <div>
       <div class="card">
         <h3 style="margin-top:0">Measurement</h3>
-        <div id="mRes" class="note">Choose 📏 Distance and tap two points on the model (e.g. the mesial and distal contact points of a tooth). Use 〰 Arch length to tap along the arch from first molar to first molar, then press Done.</div>
+        <div id="mRes" class="note">Choose 📏 Distance and tap two points on the model (e.g. the mesial and distal contact points of a tooth), then tap the tooth to save it to.</div>
         <div class="note" id="mTargetNote" style="margin-top:8px"></div>
         <div class="chart" id="mChart" style="margin-top:6px"></div>
         <div class="chips" id="mTargets"></div>
         <div class="row"><button class="btn sm primary" id="mSave">Save</button></div>
-        <div class="row" style="margin-top:6px"><button class="btn sm" id="mDone" hidden>Done</button></div>
+        
       </div>
       <div class="card note" id="mInfo">No models loaded.</div>
     </div>
@@ -312,26 +308,15 @@ dialog::backdrop{background:#000a}
     <label class="f">Molar relation – left<select data-k="occ.molL" class="molsel"></select></label>
     <label class="f">Canine relation – right<select data-k="occ.canR" class="molsel"></select></label>
     <label class="f">Canine relation – left<select data-k="occ.canL" class="molsel"></select></label>
-    <label class="f">Incisor relationship<select data-k="occ.inc"><option value="">—</option><option>Class I</option><option>Class II div 1</option><option>Class II div 2</option><option>Class III</option></select></label>
     <label class="f">Overjet (mm, − = reverse)<input type="number" step="0.5" data-k="occ.oj"></label>
     <label class="f">Overbite (mm, − = open)<input type="number" step="0.5" data-k="occ.ob"></label>
-    <label class="f">Overbite<select data-k="occ.obType"><option value="">—</option><option>Normal</option><option>Deep – incomplete</option><option>Deep – complete to palate</option><option>Deep – traumatic</option><option>Edge to edge</option><option>Anterior open bite</option><option>Lateral open bite</option></select></label>
-    <label class="f">Anterior crossbite (teeth)<input data-k="occ.antX" placeholder="e.g. 12, 22 or blank"></label>
     <label class="f">Posterior crossbite<select data-k="occ.postX"><option value="">None</option><option>Right</option><option>Left</option><option>Bilateral</option></select></label>
-    <label class="f">Scissor bite<select data-k="occ.scissor"><option value="">None</option><option>Right</option><option>Left</option><option>Bilateral</option></select></label>
-    <label class="f">Functional shift on closing<select data-k="occ.shift"><option value="">No</option><option>Yes – lateral</option><option>Yes – anterior</option></select></label>
     <label class="f">Curve of Spee depth (mm)<input type="number" step="0.5" data-k="occ.spee"></label>
-    <label class="f">Upper crowding (mm, if not measured below)<input type="number" step="0.5" data-k="occ.crowdU"></label>
-    <label class="f">Lower crowding (mm, if not measured below)<input type="number" step="0.5" data-k="occ.crowdL"></label>
-    <label class="f">Upper spacing (mm)<input type="number" step="0.5" data-k="occ.spaceU"></label>
-    <label class="f">Lower spacing (mm)<input type="number" step="0.5" data-k="occ.spaceL"></label>
-    <label class="f">Arch form<select data-k="occ.form"><option value="">—</option><option>Ovoid</option><option>Tapered / V</option><option>Square</option><option>Asymmetric</option></select></label>
     <label class="f span2">Rotations, ectopic teeth, other<textarea data-k="occ.notes"></textarea></label>
   </div>
 
   <h2>Tooth widths, Bolton and space analysis</h2>
-  <div class="card"><div class="row"><button class="btn primary" id="mAuto">✨ Auto-measure teeth</button><button class="btn sm" id="mSwap" title="If the teeth were numbered on the wrong side">⇄ Swap left / right</button><button class="btn sm" id="mPts" aria-pressed="true">Show tooth points</button><button class="btn sm" id="mCheck">🔎 Check detection</button></div><div id="autoInfo" style="margin-top:8px"></div></div>
-  <p class="note">Mesio-distal widths in mm — measure on the 3D model with 📏 and Save, or type them in from calipers.</p>
+  <div class="card"><div class="row"><button class="btn primary" id="mAuto">✨ Auto-measure teeth</button></div><div id="autoInfo" style="margin-top:8px"></div></div>
   <div class="card wrapx" id="widths"></div>
   <div class="card grid">
     <label class="f">Upper arch length available (mm, 6–6 mesial)<input type="number" step="0.1" data-k="arch.availU"></label>
@@ -347,7 +332,7 @@ dialog::backdrop{background:#000a}
     <div class="row" style="margin-bottom:8px"><label class="f">Anchorage<select data-k="plan.anchSim"><option value="mod">Moderate</option><option value="min">Minimum (back teeth move forward more)</option><option value="max">Maximum / TADs</option></select></label>
       <label class="f">Lips<select data-k="plan.lipSim"><option value="average">Average thickness</option><option value="thin">Thin</option><option value="thick">Thick</option></select></label></div>
     <div id="planner"></div>
-    <div class="row" style="margin-top:10px" id="extViews"><span class="note">Show on the 3D models:</span><button class="btn sm" data-v="before" aria-pressed="true">Before</button><button class="btn sm" data-v="extracted">After extraction</button><button class="btn sm" data-v="seg">Segmentation</button><button class="btn sm" data-v="setup">Final set-up (aligned)</button></div>
+    <div class="row" style="margin-top:10px" id="extViews"><span class="note">Show on the 3D models:</span><button class="btn sm" data-v="before" aria-pressed="true">Before</button><button class="btn sm" data-v="extracted">After extraction</button><button class="btn sm" data-v="setup">Final set-up (aligned)</button></div>
     <div class="note" id="extNote"></div>
     <div class="note">Sources for the lip ratios: <a href="https://pubmed.ncbi.nlm.nih.gov/19852663/" target="_blank" rel="noopener">Leonardi et al. 2010 (systematic review)</a> · <a href="https://pubmed.ncbi.nlm.nih.gov/9107377/" target="_blank" rel="noopener">African American females, 1.75 : 1 and 1.2 : 1</a> · <a href="https://www.sciencedirect.com/science/article/abs/pii/S0889540624001495" target="_blank" rel="noopener">thin vs thick lips (adults)</a>.</div>
   </div>
@@ -522,10 +507,6 @@ dialog::backdrop{background:#000a}
     <button class="btn sm" id="edReset">Reset</button><span style="flex:1"></span><button class="btn sm" id="edCancel">Cancel</button><button class="btn sm primary" id="edSave">Save</button></div>
   <div class="note">Drag inside the box to move it, drag a corner to resize, or drag outside to draw a new crop.</div>
 </div></dialog>
-<dialog id="chkDlg" style="width:min(980px,calc(100vw - 16px))"><div style="padding:12px;display:flex;flex-direction:column;gap:8px">
-  <b>What Claude found on each model</b><div class="note">Cyan = contact points, yellow = cusp, red = left out because it looks wrong. The numbers should run 7→1 | 1→7 around a U. Screenshot this if the set-up looks wrong.</div>
-  <div id="chkOut" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px"></div>
-  <div class="row"><span style="flex:1"></span><button class="btn" onclick="this.closest('dialog').close()">Close</button></div></div></dialog>
 <dialog id="waDlg"><div style="padding:16px;display:flex;flex-direction:column;gap:10px">
   <b>📲 Get files from WhatsApp</b>
   <div><b>Android</b> — add Ortho Assess to the home screen once (Chrome ⋮ → Add to Home screen / Install app). Then in WhatsApp long-press the STL, X-ray, photo, PDF or ZIP → Share → <b>Ortho Assess</b>. It opens and adds the files to the case on screen.</div>
@@ -999,14 +980,6 @@ $('#simPNG').onclick=()=>{if(!cephView.img)return;const a=document.createElement
 $('#pvEdit').onclick=async()=>{const slot=phSlot,b=await DB.getBlob(cur.photos[slot]);$('#pvDlg').close();openEditor(b,SLOTS.find(s=>s[0]===slot)[1],async(blob,map)=>{if(slot==='ep'&&cur.fx.pred&&cur.fx.pred.pts){const keep=cur.fx.pred.pts;for(const k in keep)keep[k]=map(keep[k]);const old=cur.photos.ep,k2='b:'+uid();await DB.putBlob(k2,blob);cur.photos.ep=k2;await DB.delBlob(old);saveNow();renderPhotos();predImg=null;renderPred()}else await storePhoto(slot,blob);toast('Picture saved')})};
 $('#waBtn').onclick=()=>{$('#moreDlg').close();$('#waDlg').showModal()};$('#waPick').onchange=e=>{const fs=[...e.target.files];e.target.value='';$('#waDlg').close();if(fs.length)routeFiles(fs)};
 $('#mAuto').onclick=autoMeasure;
-$('#mCheck').onclick=()=>{const A=cur.models.auto||{},out=$('#chkOut');out.innerHTML='';let any=false;
-  for(const side of['upper','lower']){const S=A[side];if(!S||!origP[side])continue;any=true;const F=frameFromTeeth(S.frame,S.teeth,side),shot=orthoShot(origP[side],F,900),bad=checkTeeth(side)||{},cv=document.createElement('canvas');cv.width=cv.height=900;cv.style.width='100%';cv.style.borderRadius='10px';
-    const box=document.createElement('div');box.innerHTML=`<b>${side==='upper'?'Upper':'Lower'}</b> — ${Object.keys(S.teeth).length} teeth${Object.keys(bad).length?`, left out: ${Object.entries(bad).map(([k,v])=>k+' ('+v+')').join('; ')}`:''}`;box.prepend(cv);out.append(box);
-    const im=new Image();im.onload=()=>{const x=cv.getContext('2d');x.drawImage(im,0,0);x.font='bold 18px sans-serif';x.lineWidth=2;const ord=ARCH_TEETH[side].filter(k=>S.teeth[k]);x.strokeStyle='#ffffff66';x.beginPath();
-      ord.forEach((k,i)=>{const p=shot.toPix(mid3(S.teeth[k].m,S.teeth[k].d));i?x.lineTo(p[0],p[1]):x.moveTo(p[0],p[1])});x.stroke();
-      for(const k of ord){const t=S.teeth[k],col=bad[k]?'#ef4444':'#22d3ee',m=shot.toPix(t.m),d=shot.toPix(t.d);x.strokeStyle=col;x.beginPath();x.moveTo(m[0],m[1]);x.lineTo(d[0],d[1]);x.stroke();for(const q of[m,d]){x.fillStyle=col;x.beginPath();x.arc(q[0],q[1],5,0,7);x.fill()}
-        if(t.c){const c=shot.toPix(t.c);x.fillStyle=bad[k]?'#ef4444':'#facc15';x.beginPath();x.arc(c[0],c[1],6,0,7);x.fill();x.fillStyle='#fff';x.strokeStyle='#000';x.lineWidth=4;x.strokeText(k,c[0]+8,c[1]-8);x.fillText(k,c[0]+8,c[1]-8);x.lineWidth=2}}};im.src=shot.url}
-  if(!any)return toast('Run ✨ Auto-measure teeth first');$('#chkDlg').showModal()};$('#mSwap').onclick=swapSides;$('#mPts').onclick=e=>{e.target.setAttribute('aria-pressed',e.target.getAttribute('aria-pressed')!=='true');showToothMarks()};
 $('#extViews').onclick=e=>{const b=e.target.closest('[data-v]');if(b&&!b.disabled)showExtraction(b.dataset.v)};
 $('#predCv').onclick=e=>{if(!predImg)return;const r=e.target.getBoundingClientRect(),pts=((cur.fx.pred=cur.fx.pred||{}).pts=cur.fx.pred.pts||{}),need=PRED_PTS.find(([p])=>!pts[p]);if(!need)return;
   pts[need[0]]=[(e.clientX-r.left)*predImg.width/r.width,(e.clientY-r.top)*predImg.height/r.height].map(r1);if(!num(cur.fx.predScale)){cur.fx.predScale=defaultScale();$('#predScale').value=cur.fx.predScale}saveNow();renderPred()};
@@ -1367,7 +1340,7 @@ function applyMetrics(side){const A=cur.models.auto[side];if(!A)return;const M=t
   const U=side==='upper';if(M.icw)cur.arch[U?'icwU':'icwL']=M.icw;if(M.imw)cur.arch[U?'imwU':'imwL']=M.imw;if(M.avail)cur.arch[U?'availU':'availL']=M.avail;if(!U&&M.spee!=null)cur.occ.spee=M.spee;
   A.metrics=M;bindAll();renderWidths();renderAnalysis();fillSaveTo()}
 function swapSides(){for(const side of['upper','lower']){const A=cur.models.auto&&cur.models.auto[side];if(!A)continue;const sw={};for(const k in A.teeth){const q=Math.floor(k/10),u=k%10,nq={1:2,2:1,3:4,4:3}[q];sw[nq*10+u]=A.teeth[k]}A.teeth=sw;applyMetrics(side)}saveNow();showToothMarks();renderAutoInfo();renderPlanner();toast('Left and right swapped')}
-function showToothMarks(){mesh.tmarks=[];if($('#mPts').getAttribute('aria-pressed')!=='true'||extView!=='before'){mesh.render();return}for(const side of['upper','lower']){const A=cur.models.auto&&cur.models.auto[side];if(!A||!mesh.meshes[side]||!mesh.meshes[side].vis)continue;
+function showToothMarks(){mesh.tmarks=[];if(extView!=='before'){mesh.render();return}for(const side of['upper','lower']){const A=cur.models.auto&&cur.models.auto[side];if(!A||!mesh.meshes[side]||!mesh.meshes[side].vis)continue;
   for(const k in A.teeth){const t=A.teeth[k];mesh.tmarks.push({p:t.m,col:'#22d3ee'},{p:t.d,col:'#22d3ee'});if(t.c)mesh.tmarks.push({p:t.c,col:t.conf==='low'?'#f97316':'#facc15',lab:k})}}mesh.render()}
 function renderAutoInfo(){const A=cur.models.auto||{};const parts=['upper','lower'].filter(s=>A[s]).map(s=>{const M=A[s].metrics||{};return`<div><b>${s==='upper'?'Upper':'Lower'}</b>: ${Object.keys(A[s].teeth).length} teeth measured${M.icw?` · inter-canine ${M.icw} mm`:''}${M.imw?` · inter-molar ${M.imw} mm`:''}${M.avail?` · arch length 6–6 ${M.avail} mm`:''}${M.spee!=null?` · curve of Spee ${M.spee} mm`:''}${A[s].note?`<div class="note">${esc(A[s].note)}</div>`:''}</div>`});
   $('#autoInfo').innerHTML=parts.length?parts.join('')+'<div class="note">Values are filled into the tables below — type over any of them, or re-measure a tooth with 📏 Distance and Save.</div>':'<span class="note">Press ✨ Auto-measure teeth to fill every tooth width and the arch measurements from the scans.</span>'}
@@ -1475,87 +1448,7 @@ function showSegmentation(){let any=false;for(const side of['upper','lower']){if
   const P=origP[side],parts={};for(let t=0;t<L.length;t++)(parts[L[t]]=parts[L[t]]||[]).push(t);mesh.remove(side);
   for(const k in parts){const a=new Float32Array(parts[k].length*9);parts[k].forEach((t,i)=>a.set(P.subarray(t*9,t*9+9),i*9));mesh.set('seg'+side+k,a,+k?SEG_COLORS[(+k)%SEG_COLORS.length]:[0.55,0.45,0.48])}}return any}
 
-/* ---------- roots and model base ----------
-   Intra-oral scans have crowns and gum only. Roots are built from each crown's gum line downwards along the crown's
-   long axis, with average root lengths and root numbers from dental anatomy (Wheeler's Dental Anatomy averages). */
-const ROOT_LEN={u:{1:13,2:13,3:17,4:14,5:14,6:12.5,7:11.5},l:{1:12.5,2:14,3:16,4:14,5:14.5,6:14,7:13}};
-// teeth with more than one root: trunk = depth (mm) where the roots split; each root = [mesio-distal offset (+ = distal), bucco-lingual offset (+ = buccal), md radius, bl radius, length factor]
-const ROOT_FORM={u:{4:{trunk:6,r:[[0,0.45,0.8,0.5,1],[0,-0.45,0.8,0.5,0.95]]},6:{trunk:4,r:[[-0.45,0.4,0.45,0.45,0.95],[0.45,0.4,0.4,0.4,0.9],[0,-0.5,0.5,0.5,1.05]]},7:{trunk:4.5,r:[[-0.4,0.35,0.45,0.45,0.95],[0.4,0.35,0.4,0.4,0.9],[0,-0.45,0.5,0.5,1]]}},
-  l:{6:{trunk:3,r:[[-0.5,0,0.45,0.85,1],[0.5,0,0.4,0.8,0.95]]},7:{trunk:3.5,r:[[-0.4,0,0.45,0.85,1],[0.4,0,0.4,0.8,0.95]]}}};
-const ROOT_COLOR=[0.93,0.8,0.58],GUM_COLOR=[0.86,0.55,0.58],BASE_COLOR=[0.88,0.89,0.92];
-let rootsOn=false,baseOn=false;const baseCache={};
-const rootTaper=t=>Math.sqrt(Math.max(0,1-t*t))*(1-0.55*t);// rounded apex
-function loft(rings,apex,out){const NS=rings[0].length;for(let r=0;r+1<rings.length;r++)for(let s=0;s<NS;s++){const a=rings[r][s],b=rings[r][(s+1)%NS],c=rings[r+1][(s+1)%NS],d=rings[r+1][s];out.push(...a,...b,...c,...a,...c,...d)}
-  const L=rings[rings.length-1];for(let s=0;s<NS;s++)out.push(...L[s],...L[(s+1)%NS],...apex)}
-function toothRoots(side){if(!segmentArch(side))return null;const S=segCache[side];if(S.roots)return S.roots;
-  const A=cur.models.auto[side],F=S.F,P=origP[side],tris=crownTris(side),arch=side==='upper'?'u':'l',out={},NS=24,K=10;
-  for(const k in tris){const u=k%10,T=A.teeth[k],Lr=ROOT_LEN[arch][u];if(!T||!Lr)continue;
-    const ps=[];for(const i of tris[k])for(let j=0;j<9;j+=3)ps.push([P[i+j],P[i+j+1],P[i+j+2]]);if(ps.length<30)continue;
-    const cc=ps.reduce((a,p)=>v3(a,p,1/ps.length),[0,0,0]);let z=F.e3;
-    if(u<=5){const C=[[0,0,0],[0,0,0],[0,0,0]];for(const p of ps){const d=v3(p,cc,-1);for(let a=0;a<3;a++)for(let b=0;b<3;b++)C[a][b]+=d[a]*d[b]}
-      const ax=jacobi3(C)[0].vec;if(Math.abs(d3(ax,F.e3))>0.75)z=n3(d3(ax,F.e3)<0?ax.map(x=>-x):ax)}
-    let x=v3(T.d,T.m,-1);x=v3(x,z,-d3(x,z));if(Math.hypot(...x)<1e-6)continue;x=n3(x);let y=x3(z,x);const out2=v3(cc,F.c,-1);if(d3(y,v3(out2,F.e3,-d3(out2,F.e3)))<0)y=y.map(v=>-v);// x distal, y buccal
-    const w=Math.hypot(...v3(T.d,T.m,-1)),hh=p=>d3(v3(p,cc,-1),z);let cv=S.cerv[k]||[];
-    if(cv.length<12){const hm=Math.min(...ps.map(hh));cv=ps.filter(p=>hh(p)<hm+1.5)}
-    {const hs=cv.map(hh).sort((a,b)=>a-b),hlo=hs[Math.floor(hs.length*0.1)];cv=cv.filter(p=>hh(p)<hlo+4)}
-    const c0=v3(cv.reduce((a,p)=>v3(a,p,1/cv.length),[0,0,0]),[0,0,0]),rad=new Array(NS).fill(0),hgt=new Array(NS).fill(null);
-    for(const p of cv){const d=v3(p,c0,-1),px=d3(d,x),py=d3(d,y),r=Math.hypot(px,py),s=((Math.round(Math.atan2(py,px)/(2*Math.PI)*NS)%NS)+NS)%NS;if(r>rad[s]){rad[s]=r;hgt[s]=d3(d,z)}}
-    const have=[...Array(NS).keys()].filter(s=>rad[s]>0);if(have.length<4)continue;
-    for(let s=0;s<NS;s++)if(!(rad[s]>0)){let a=s,b=s,da=0,db=0;while(!(rad[a]>0)){a=(a+NS-1)%NS;da++}while(!(rad[b]>0)){b=(b+1)%NS;db++}const f=da/(da+db);rad[s]=-(rad[a]*(1-f)+rad[b]*f);hgt[s]=hgt[a]*(1-f)+hgt[b]*f}
-    for(let s=0;s<NS;s++)rad[s]=Math.abs(rad[s]);
-    for(let it=0;it<2;it++){const r0=rad.slice(),h0=hgt.slice();for(let s=0;s<NS;s++){rad[s]=(r0[(s+NS-1)%NS]+2*r0[s]+r0[(s+1)%NS])/4;hgt[s]=(h0[(s+NS-1)%NS]+2*h0[s]+h0[(s+1)%NS])/4}}
-    for(let s=0;s<NS;s++)rad[s]=Math.max(0.2*w,Math.min(0.42*w,rad[s]))*0.96;
-    const ring=(c,t,sc,hk)=>[...Array(NS).keys()].map(s=>{const a=s/NS*2*Math.PI;return v3(v3(v3(c,x,Math.cos(a)*rad[s]*sc),y,Math.sin(a)*rad[s]*sc),z,hgt[s]*hk)});
-    const tri=[],form=ROOT_FORM[arch][u];
-    if(!form){const rings=[];for(let i=0;i<K;i++){const t=i/K;rings.push(ring(v3(c0,z,-t*Lr),t,rootTaper(t),(1-t)*(1-t)))}loft(rings,v3(c0,z,-Lr),tri)}
-    else{const tr=form.trunk,rings=[];for(let i=0;i<=4;i++){const t=i/4;rings.push(ring(v3(c0,z,-t*tr),t,1-0.12*t,(1-t)*(1-t)))}
-      loft(rings,v3(c0,z,-tr-0.5),tri);// trunk, closed under the split
-      const rx=(rad[0]+rad[NS/2])/2*0.88,ry=(rad[NS/4]+rad[3*NS/4])/2*0.88;
-      for(const[ox,oy,sx,sy,lf]of form.r){const len=Lr*lf-tr+1,off=v3(v3([0,0,0],x,ox*rx),y,oy*ry),sub=[];
-        for(let i=0;i<K;i++){const t=i/K,f=rootTaper(t),c=v3(v3(v3(c0,z,-(tr-1)-t*len),off,1+0.35*t),[0,0,0]);
-          sub.push([...Array(NS).keys()].map(s=>{const a=s/NS*2*Math.PI;return v3(v3(c,x,Math.cos(a)*sx*rx*f),y,Math.sin(a)*sy*ry*f)}))}
-        loft(sub,v3(v3(c0,z,-(tr-1)-len),off,1.35),tri)}}
-    out[k]=new Float32Array(tri)}
-  S.roots=out;return out}
-/* a flat study-model base: walls from the scan's open edge down to a slab shaped like the arch outline */
-function hull2(pts){pts=pts.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]);const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]),lo=[],up=[];
-  for(const p of pts){while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0)lo.pop();lo.push(p)}for(let i=pts.length-1;i>=0;i--){const p=pts[i];while(up.length>=2&&cr(up[up.length-2],up[up.length-1],p)<=0)up.pop();up.push(p)}
-  lo.pop();up.pop();return lo.concat(up)}
-function archBase(side){const P=origP[side];if(!P)return null;const A=cur.models.auto&&cur.models.auto[side],key=P.length+':'+(A?A.at:'');if(baseCache[side]&&baseCache[side].key===key)return baseCache[side];
-  const{V,T,n}=weldMesh(P),nt=T.length/3,E=new Map();
-  for(let t=0;t<nt;t++)for(let j=0;j<3;j++){const a=T[t*3+j],b=T[t*3+(j+1)%3];if(a===b)continue;const kk=a<b?a*n+b:b*n+a,e=E.get(kk);if(e)e.c++;else E.set(kk,{a,b,c:1})}
-  const bnd=[];for(const e of E.values())if(e.c===1)bnd.push(e);
-  if(bnd.length<20)return baseCache[side]={key,closed:true};
-  let c=[0,0,0];for(let i=0;i<n;i++)c=v3(c,[V[i*3],V[i*3+1],V[i*3+2]],1/n);let e1,e2,e3;
-  if(A&&A.frame){e1=A.frame.e1;e2=A.frame.e2;e3=A.frame.e3}else{const C=[[0,0,0],[0,0,0],[0,0,0]],st=Math.max(1,Math.floor(n/30000));for(let i=0;i<n;i+=st){const d=[V[i*3]-c[0],V[i*3+1]-c[1],V[i*3+2]-c[2]];for(let a=0;a<3;a++)for(let b=0;b<3;b++)C[a][b]+=d[a]*d[b]}const J=jacobi3(C);e1=J[0].vec;e2=J[1].vec;e3=J[2].vec}
-  const H=i=>(V[i*3]-c[0])*e3[0]+(V[i*3+1]-c[1])*e3[1]+(V[i*3+2]-c[2])*e3[2];
-  {let hb=0;for(const e of bnd)hb+=H(e.a);hb/=bnd.length;if(hb>0){e3=e3.map(v=>-v);e1=e1.map(v=>-v)}}// the open edge is on the gum side: the base goes there
-  let hmin=Infinity;for(let i=0;i<n;i++)hmin=Math.min(hmin,H(i));const htop=hmin-1,hbot=htop-10,out=[];
-  const drop=(i,h)=>{const p=[V[i*3],V[i*3+1],V[i*3+2]];return v3(p,e3,h-H(i))};
-  for(const e of bnd){const a=[V[e.a*3],V[e.a*3+1],V[e.a*3+2]],b=[V[e.b*3],V[e.b*3+1],V[e.b*3+2]],a2=drop(e.a,htop),b2=drop(e.b,htop);out.push(...a,...b,...b2,...a,...b2,...a2)}
-  const pl=[],st=Math.max(1,Math.floor(n/20000));for(let i=0;i<n;i+=st){const d=[V[i*3]-c[0],V[i*3+1]-c[1],V[i*3+2]-c[2]];pl.push([d3(d,e1),d3(d,e2)])}
-  let hl=hull2(pl);const rr=[];for(const p of hl)for(let a=0;a<12;a++)rr.push([p[0]+2.5*Math.cos(a*Math.PI/6),p[1]+2.5*Math.sin(a*Math.PI/6)]);hl=hull2(rr);
-  const W=(q,h)=>v3(v3(v3(c,e1,q[0]),e2,q[1]),e3,h),m=hl.reduce((a,q)=>[a[0]+q[0]/hl.length,a[1]+q[1]/hl.length],[0,0]);
-  for(let i=0;i<hl.length;i++){const p=hl[i],q=hl[(i+1)%hl.length];out.push(...W(m,htop),...W(p,htop),...W(q,htop),...W(m,hbot),...W(q,hbot),...W(p,hbot),...W(p,htop),...W(p,hbot),...W(q,hbot),...W(p,htop),...W(q,hbot),...W(q,htop))}
-  return baseCache[side]={key,mesh:new Float32Array(out)}}
-/* draw one arch: crowns (minus extracted teeth), see-through gum + roots when roots are on, base when on */
-function drawArch(side,removed){const P=origP[side];for(const p of['gum','roots','base'])mesh.remove(p+side);let note='';
-  const L=(removed.length||rootsOn)&&cur.models.auto&&cur.models.auto[side]?segmentArch(side):null;
-  if(rootsOn&&L){const cr=[],gm=[];for(let t=0;t<L.length;t++){const dst=L[t]>0?(removed.includes(L[t])?null:cr):gm;if(dst)for(let j=0;j<9;j++)dst.push(P[t*9+j])}
-    mesh.set(side,new Float32Array(cr),COLORS[side]);mesh.set('gum'+side,new Float32Array(gm),GUM_COLOR,{alpha:0.35});
-    const R=toothRoots(side)||{},rs=[];for(const k in R)if(!removed.includes(+k))for(const v of R[k])rs.push(v);if(rs.length)mesh.set('roots'+side,new Float32Array(rs),ROOT_COLOR)}
-  else{if(rootsOn)note='roots need ✨ Auto-measure teeth first';mesh.set(side,removed.length&&L?deformArch(side,removed):P,COLORS[side])}
-  if(baseOn){const B=archBase(side);if(B&&B.mesh)mesh.set('base'+side,B.mesh,BASE_COLOR,{alpha:rootsOn?0.4:1});else if(B&&B.closed)note=(note?note+'; ':'')+'this scan already has a base'}
-  return note}
-function setupRoots(side,placed){mesh.remove('roots'+side);if(!rootsOn||!placed)return;const R=toothRoots(side)||{},rs=[];
-  for(const k in placed){const q=placed[k],r=R[k];if(!r||!q.Rm)continue;for(let i=0;i<r.length;i+=3){const v=mv3(q.Rm,[r[i]-q.piv[0],r[i+1]-q.piv[1],r[i+2]-q.piv[2]]);rs.push(v[0]+q.tgt[0],v[1]+q.tgt[1],v[2]+q.tgt[2])}}
-  if(rs.length)mesh.set('roots'+side,new Float32Array(rs),ROOT_COLOR)}
-function downloadSTL(){let n=0;for(const side of['upper','lower']){const ms=Object.entries(mesh.meshes).filter(([k,m])=>m.vis&&(k===side||k.startsWith('gum'+side)||k.startsWith('roots'+side)||k.startsWith('base'+side)||k.startsWith('seg'+side)));if(!ms.length)continue;
-    const nt=ms.reduce((a,[,m])=>a+m.P.length/9,0),buf=new ArrayBuffer(84+50*nt),dv=new DataView(buf);dv.setUint32(80,nt,true);let o=84;
-    for(const[,m]of ms){const P=m.P;for(let i=0;i<P.length;i+=9){o+=12;for(let j=0;j<9;j++){dv.setFloat32(o,P[i+j],true);o+=4}o+=2}}
-    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([buf],{type:'model/stl'}));a.download=(cur.pt.name||'case').replace(/[^\w-]+/g,'_')+'-'+side+'-'+extView+'.stl';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);n++}
-  if(!n)toast('Upload a model first')}
-
+function drawArch(side,removed){const P=origP[side],L=removed.length&&cur.models.auto&&cur.models.auto[side]?segmentArch(side):null;mesh.set(side,L?deformArch(side,removed):P,COLORS[side])}
 function crownTris(side){const L=segmentArch(side);if(!L)return null;const out={};for(let t=0;t<L.length;t++)if(L[t]>0)(out[L[t]]=out[L[t]]||[]).push(t*9);return out}
 function solveArch(sumC,sumM,icw,imw){// y = -D (t/Xm)^p, t = distance from the midline; fit arc lengths to the canine and the first molar
   const Xm=imw/2,xc=icw/2,arc=(D,p,T)=>{let s=0,px=0,py=0;const n=60;for(let i=1;i<=n;i++){const t=T*i/n,y=-D*Math.pow(t/Xm,p);s+=Math.hypot(t-px,y-py);px=t;py=y}return s};
@@ -1571,7 +1464,7 @@ function buildSetupRaw(pat,sim,delta){const A0=cur.models.auto||{},sides=['lower
   const G=A.lower?A.lower.frame:{...A.upper.frame,e3:A.upper.frame.e3.map(x=>-x),e1:n3(x3(A.upper.frame.e2,A.upper.frame.e3.map(x=>-x)))},g=p=>{const d=[p[0]-G.c[0],p[1]-G.c[1],p[2]-G.c[2]];return[d3(d,G.e1),d3(d,G.e2),d3(d,G.e3)]},wp=q=>v3(v3(v3(G.c,G.e1,q[0]),G.e2,q[1]),G.e3,q[2]);
   const flatW=(T)=>{const d=v3(T.d,T.m,-1);return Math.hypot(d3(d,G.e1),d3(d,G.e2))},W=(t)=>num(cur.w[t])??(A.lower&&A.lower.teeth[t]?flatW(A.lower.teeth[t]):A.upper&&A.upper.teeth[t]?flatW(A.upper.teeth[t]):AVG_W[t]);
   const ext=new Set([...pat.U,...pat.L]),res={meshes:{},notes:[]};
-  for(const s of sides){const b=Object.keys(A[s].bad);if(b.length)res.notes.push(`${s} teeth left out (detection looks wrong): ${b.join(', ')} — open 🔎 Check detection`);if(Object.keys(A[s].teeth).length-b.length<8){res.notes.push(`Too few reliable ${s} teeth for a set-up — open 🔎 Check detection and run ✨ Auto-measure again`);res.fail=true}}
+  for(const s of sides){const b=Object.keys(A[s].bad);if(b.length)res.notes.push(`${s} teeth left out (detection looks wrong): ${b.join(', ')}`);if(Object.keys(A[s].teeth).length-b.length<8){res.notes.push(`Too few reliable ${s} teeth for a set-up — run ✨ Auto-measure again`);res.fail=true}}
   if(res.fail)return res;
   const cuspG=(side,k)=>{const t=A[side]&&A[side].teeth[k];return t&&t.c?g(t.c):null};
   const ref=A.lower?'lower':'upper',R=ref==='lower'?[41,31,43,33,46,36]:[11,21,13,23,16,26];const ci=R.map(k=>cuspG(ref,k));
@@ -1610,15 +1503,15 @@ function buildSetupRaw(pat,sim,delta){const A0=cur.models.auto||{},sides=['lower
   const av=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;res.dev={c:av(dv.c),m:av(dv.m),n:dv.c.length+dv.m.length};res.oj=SETUP.oj+delta;
   return res}
 
-function showExtraction(mode){extView=mode;for(const b of $$('#extViews button'))b.setAttribute('aria-pressed',b.dataset.v===mode);clearSeg();for(const side of['upper','lower'])for(const p of['gum','roots','base'])mesh.remove(p+side);
-  if(mode==='seg'){$('#mHint').hidden=false;$('#mHint').textContent='Finding each tooth…';setTimeout(()=>{const ok=showSegmentation();if(baseOn)for(const side of['upper','lower']){const B=archBase(side);if(B&&B.mesh)mesh.set('base'+side,B.mesh,BASE_COLOR)}$('#mHint').hidden=true;showToothMarks();$('#extNote').textContent=ok?'Each tooth in its own colour, gum in dark pink. If a crown is cut or includes gum, re-measure that tooth (its points steer the segmentation).':'Run ✨ Auto-measure teeth first.'},30);return}
+function showExtraction(mode){extView=mode;for(const b of $$('#extViews button'))b.setAttribute('aria-pressed',b.dataset.v===mode);clearSeg();
+  if(mode==='seg'){$('#mHint').hidden=false;$('#mHint').textContent='Finding each tooth…';setTimeout(()=>{const ok=showSegmentation();$('#mHint').hidden=true;showToothMarks();$('#extNote').textContent=ok?'Each tooth in its own colour, gum in dark pink. If a crown is cut or includes gum, re-measure that tooth (its points steer the segmentation).':'Run ✨ Auto-measure teeth first.'},30);return}
   const pat=PATTERNS.find(p=>p.id===(cur.plan.extPat||'4s'))||PATTERNS[1],sim=simulate(cur,pat,{anch:cur.plan.anchSim||'mod',lips:cur.plan.lipSim||'average'});let miss=[];
   if(mode==='setup'){const S=buildSetup(pat,sim);if(!S){$('#extNote').textContent='Run ✨ Auto-measure teeth first so each tooth can be found on the models.';return}
-    for(const side of['upper','lower']){if(!origP[side])continue;if(S.meshes[side]&&S.meshes[side].length)mesh.set(side,S.meshes[side],COLORS[side]);else mesh.set(side,origP[side],COLORS[side]);setupRoots(side,S[side])}showToothMarks();
+    for(const side of['upper','lower']){if(!origP[side])continue;if(S.meshes[side]&&S.meshes[side].length)mesh.set(side,S.meshes[side],COLORS[side]);else mesh.set(side,origP[side],COLORS[side])}showToothMarks();
     const ar=S.arch;$('#extNote').innerHTML=ar?`<b>Final set-up — ${esc(pat.name)}</b>: every crown placed on an ideal arch (keeps inter-canine ${r1(ar.icw)} mm and inter-molar ${r1(ar.imw)} mm), curve of Spee levelled, incisors ${ar.move>0?r1(ar.move)+' mm back':ar.move<0?r1(-ar.move)+' mm forward':'in place'}${S.upper&&S.lower?`, overjet ${r1(S.oj??SETUP.oj)} mm${S.delta?` (upper arch moved ${S.delta>0?'forward':'back'} ${r1(Math.abs(S.delta))} mm to bring canines and molars closer to Class I — Andrews' first key)`:''}, overbite ${SETUP.ob} mm, upper buccal cusps ${SETUP.buccalOJ} mm outside the lowers`:''}; front teeth tip and torque set to Andrews' norms. ${S.notes.length?'Result: '+esc(S.notes.join(' · '))+'.':''}<div class="note">Crowns only (gums hidden). A planning illustration from the measured widths — check against a lab or software set-up before treatment.</div>`:esc(S.notes.join(' '));return}
-  const notes=[];for(const side of['upper','lower']){if(!origP[side])continue;const teeth=mode==='before'?[]:side==='upper'?pat.U:pat.L;if(teeth.length&&!(cur.models.auto&&cur.models.auto[side]))miss.push(side);
-    const nt=drawArch(side,miss.includes(side)?[]:teeth);if(nt)notes.push(side+': '+nt)}
-  showToothMarks();$('#extNote').textContent=(miss.length?'Run ✨ Auto-measure teeth first so the teeth can be located on the '+miss.join(' and ')+' model.':mode==='before'?'':`${pat.name}: crowns removed, with their roots (${[...pat.U,...pat.L].join(', ')}).`)+(notes.length?' ('+notes.join('; ')+')':'')+(rootsOn?' Roots are average lengths from dental anatomy, drawn from each crown\'s gum line along its long axis — an illustration, not a CBCT.':'')}
+  for(const side of['upper','lower']){if(!origP[side])continue;const teeth=mode==='before'?[]:side==='upper'?pat.U:pat.L;if(teeth.length&&!(cur.models.auto&&cur.models.auto[side]))miss.push(side);
+    drawArch(side,miss.includes(side)?[]:teeth)}
+  showToothMarks();$('#extNote').textContent=(miss.length?'Run ✨ Auto-measure teeth first so the teeth can be located on the '+miss.join(' and ')+' model.':mode==='before'?'':`${pat.name}: crowns removed (${[...pat.U,...pat.L].join(', ')}).`)}
 function updExtButtons(){const ok=!!(cur.models.auto&&(cur.models.auto.upper||cur.models.auto.lower));for(const b of $$('#extViews button'))b.disabled=!ok&&b.dataset.v!=='before'}
 /* ---------- profile photo prediction ---------- */
 const PRED_PTS=[['Prn','Nose tip'],['Sn','Subnasale (under the nose)'],['Ls','Upper lip — most forward point'],['St','Stomion — where the lips meet'],['Li','Lower lip — most forward point'],['Sm','Labiomental fold (deepest point under the lower lip)'],['PogS','Soft-tissue chin — most forward point']];
@@ -1647,25 +1540,20 @@ const COLORS={upper:[0.93,0.86,0.72],lower:[0.78,0.84,0.93]};
 async function loadModel(side,file){try{$('#mEmpty').hidden=true;$('#mHint').hidden=false;$('#mHint').textContent='Loading '+side+' model…';
   let buf,name;if(file){buf=await file.arrayBuffer();name=file.name}else{const b=await DB.getBlob(cur.models[side].key);if(!b)throw new Error('File missing');buf=await b.arrayBuffer();name=cur.models[side].name}
   const P=parseModel(name,buf);if(file){const old=cur.models[side]&&cur.models[side].key;const k='b:'+uid();await DB.putBlob(k,file);cur.models[side]={key:k,name,tris:P.length/9};if(old)await DB.delBlob(old);save();updDots()}
-  origP[side]=P;delete segCache[side];delete baseCache[side];mesh.set(side,P,COLORS[side]);$('#mHint').hidden=true;updMeshInfo();updExtButtons();showToothMarks()}catch(err){$('#mHint').hidden=true;toast('Could not open model: '+err.message);if(!Object.keys(mesh.meshes).length)$('#mEmpty').hidden=false}}
+  origP[side]=P;delete segCache[side];mesh.set(side,P,COLORS[side]);$('#mHint').hidden=true;updMeshInfo();updExtButtons();showToothMarks()}catch(err){$('#mHint').hidden=true;toast('Could not open model: '+err.message);if(!Object.keys(mesh.meshes).length)$('#mEmpty').hidden=false}}
 function updMeshInfo(){const m=cur.models;$('#mEmpty').hidden=!mesh.fail&&!!(m.upper||m.lower);
   $('#mInfo').innerHTML=['upper','lower'].map(s=>`<div><b>${s==='upper'?'Upper':'Lower'}:</b> ${m[s]?esc(m[s].name)+' <span class="muted">('+(m[s].tris||0).toLocaleString()+' triangles)</span> <button class="btn sm danger" data-rm="'+s+'">Remove</button>':'not loaded'}</div>`).join('')}
 $('#mInfo').onclick=async e=>{const s=e.target.dataset.rm;if(!s)return;await DB.delBlob(cur.models[s].key);delete cur.models[s];delete origP[s];if(cur.models.auto)delete cur.models.auto[s];mesh.remove(s);mesh.render();save();updMeshInfo();updDots()};
 $('#upU').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)addModels([f],'upper')};
 $('#upL').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)addModels([f],'lower')};
 for(const[id,s]of[['tglU','upper'],['tglL','lower']])$('#'+id).onclick=e=>{mesh.hide[s]=!mesh.hide[s];for(const k in mesh.meshes)if((k.match(/upper|lower/)||[])[0]===s)mesh.meshes[k].vis=!mesh.hide[s];e.target.setAttribute('aria-pressed',!mesh.hide[s]);mesh.render()};
-for(const[id,f]of[['mRoots','r'],['mBase','b']])$('#'+id).onclick=e=>{if(f==='r')rootsOn=!rootsOn;else baseOn=!baseOn;e.target.setAttribute('aria-pressed',f==='r'?rootsOn:baseOn);if(!origP.upper&&!origP.lower)return;
-  $('#mHint').hidden=false;$('#mHint').textContent=f==='r'?'Building roots…':'Building base…';setTimeout(()=>{try{showExtraction(extView)}finally{$('#mHint').hidden=true}},30)};
-$('#mSTL').onclick=downloadSTL;
 $('#mView').onchange=e=>{if(e.target.value)mesh.view(e.target.value);e.target.value=''};$('#mFit').onclick=()=>mesh.fit();
 let lastMeas=null;
-function setMode(m){mesh.mode=mesh.mode===m?null:m;mesh.marks=[];lastMeas=null;$('#mDist').setAttribute('aria-pressed',mesh.mode==='dist');$('#mPoly').setAttribute('aria-pressed',mesh.mode==='poly');$('#mDone').hidden=mesh.mode!=='poly';
-  $('#mHint').hidden=!mesh.mode;$('#mHint').textContent=mesh.mode==='dist'?'Tap two points on the model':'Tap points along the arch, then press Done';mesh.render()}
-$('#mDist').onclick=()=>setMode('dist');$('#mPoly').onclick=()=>setMode('poly');$('#mClear').onclick=()=>{mesh.marks=[];lastMeas=null;$('#mRes').textContent='Cleared.';mesh.render()};
+function setMode(m){mesh.mode=mesh.mode===m?null:m;mesh.marks=[];lastMeas=null;$('#mDist').setAttribute('aria-pressed',mesh.mode==='dist');
+  $('#mHint').hidden=!mesh.mode;$('#mHint').textContent='Tap two points on the model';mesh.render()}
+$('#mDist').onclick=()=>setMode('dist');$('#mClear').onclick=()=>{mesh.marks=[];lastMeas=null;$('#mRes').textContent='Cleared.';mesh.render()};
 function polyLen(a){let s=0;for(let i=1;i<a.length;i++)s+=dist3(a[i-1],a[i]);return s}
-mesh.onPick=p=>{if(mesh.mode==='dist'){if(mesh.marks.length>=2)mesh.marks=[];mesh.marks.push(p);if(mesh.marks.length===2){lastMeas=r1(dist3(...mesh.marks)*10)/10;$('#mRes').innerHTML=`Distance: <b>${lastMeas.toFixed(2)} mm</b>`;suggestSave('tooth')}else $('#mRes').textContent='Now tap the second point.'}
-  else{mesh.marks.push(p);lastMeas=Math.round(polyLen(mesh.marks)*100)/100;$('#mRes').innerHTML=`Arch length so far: <b>${lastMeas.toFixed(2)} mm</b> (${mesh.marks.length} points)`}mesh.render()};
-$('#mDone').onclick=()=>{if(mesh.marks.length<2)return toast('Tap at least two points');$('#mRes').innerHTML=`Arch length: <b>${lastMeas.toFixed(2)} mm</b> — save it below.`;suggestSave('arch');mesh.mode=null;$('#mPoly').setAttribute('aria-pressed',false);$('#mDone').hidden=true;$('#mHint').hidden=true};
+mesh.onPick=p=>{if(mesh.mode==='dist'){if(mesh.marks.length>=2)mesh.marks=[];mesh.marks.push(p);if(mesh.marks.length===2){lastMeas=r1(dist3(...mesh.marks)*10)/10;$('#mRes').innerHTML=`Distance: <b>${lastMeas.toFixed(2)} mm</b>`;suggestSave('tooth')}else $('#mRes').textContent='Now tap the second point.'}mesh.render()};
 const SAVE_TARGETS=[...[16,15,14,13,12,11,21,22,23,24,25,26].map(t=>['w.'+t,'Width of tooth '+t]),...[46,45,44,43,42,41,31,32,33,34,35,36].map(t=>['w.'+t,'Width of tooth '+t]),
   ['arch.availU','Upper arch length available'],['arch.availL','Lower arch length available'],['arch.icwU','Upper inter-canine width'],['arch.imwU','Upper inter-molar width'],['arch.icwL','Lower inter-canine width'],['arch.imwL','Lower inter-molar width'],['occ.oj','Overjet'],['occ.ob','Overbite'],['occ.spee','Curve of Spee depth']];
 $('#mChart').onclick=$('#mTargets').onclick=e=>{const b=e.target.closest('[data-st]');if(!b)return;const k=b.dataset.st;if(lastMeas!=null)return commitSave(k);saveTarget=saveTarget===k?null:k;fillSaveTo()};
