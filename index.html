@@ -332,8 +332,6 @@ dialog::backdrop{background:#000a}
     <div class="row" style="margin-bottom:8px"><label class="f">Anchorage<select data-k="plan.anchSim"><option value="mod">Moderate</option><option value="min">Minimum (back teeth move forward more)</option><option value="max">Maximum / TADs</option></select></label>
       <label class="f">Lips<select data-k="plan.lipSim"><option value="average">Average thickness</option><option value="thin">Thin</option><option value="thick">Thick</option></select></label></div>
     <div id="planner"></div>
-    <div class="row" style="margin-top:10px" id="extViews"><span class="note">Show on the 3D models:</span><button class="btn sm" data-v="before" aria-pressed="true">Before</button><button class="btn sm" data-v="extracted">After extraction</button><button class="btn sm" data-v="setup">Final set-up (aligned)</button></div>
-    <div class="note" id="extNote"></div>
     <div class="note">Sources for the lip ratios: <a href="https://pubmed.ncbi.nlm.nih.gov/19852663/" target="_blank" rel="noopener">Leonardi et al. 2010 (systematic review)</a> · <a href="https://pubmed.ncbi.nlm.nih.gov/9107377/" target="_blank" rel="noopener">African American females, 1.75 : 1 and 1.2 : 1</a> · <a href="https://www.sciencedirect.com/science/article/abs/pii/S0889540624001495" target="_blank" rel="noopener">thin vs thick lips (adults)</a>.</div>
   </div>
 </section>
@@ -980,7 +978,7 @@ $('#simPNG').onclick=()=>{if(!cephView.img)return;const a=document.createElement
 $('#pvEdit').onclick=async()=>{const slot=phSlot,b=await DB.getBlob(cur.photos[slot]);$('#pvDlg').close();openEditor(b,SLOTS.find(s=>s[0]===slot)[1],async(blob,map)=>{if(slot==='ep'&&cur.fx.pred&&cur.fx.pred.pts){const keep=cur.fx.pred.pts;for(const k in keep)keep[k]=map(keep[k]);const old=cur.photos.ep,k2='b:'+uid();await DB.putBlob(k2,blob);cur.photos.ep=k2;await DB.delBlob(old);saveNow();renderPhotos();predImg=null;renderPred()}else await storePhoto(slot,blob);toast('Picture saved')})};
 $('#waBtn').onclick=()=>{$('#moreDlg').close();$('#waDlg').showModal()};$('#waPick').onchange=e=>{const fs=[...e.target.files];e.target.value='';$('#waDlg').close();if(fs.length)routeFiles(fs)};
 $('#mAuto').onclick=autoMeasure;
-$('#extViews').onclick=e=>{const b=e.target.closest('[data-v]');if(b&&!b.disabled)showExtraction(b.dataset.v)};
+
 $('#predCv').onclick=e=>{if(!predImg)return;const r=e.target.getBoundingClientRect(),pts=((cur.fx.pred=cur.fx.pred||{}).pts=cur.fx.pred.pts||{}),need=PRED_PTS.find(([p])=>!pts[p]);if(!need)return;
   pts[need[0]]=[(e.clientX-r.left)*predImg.width/r.width,(e.clientY-r.top)*predImg.height/r.height].map(r1);if(!num(cur.fx.predScale)){cur.fx.predScale=defaultScale();$('#predScale').value=cur.fx.predScale}saveNow();renderPred()};
 $('#predSplit').oninput=()=>renderPred();$('#predReset').onclick=()=>{if(cur.fx.pred)cur.fx.pred.pts={};saveNow();renderPred()};
@@ -1388,8 +1386,8 @@ function renderPlanner(){if(!cur||!$('#planner'))return;const opt={anch:cur.plan
       <td class="n">${f(s.U.r)} / ${f(s.L.r)} mm</td><td class="n">${r1(s.U.mm)} / ${r1(s.L.mm)} mm</td><td>${molLabel(s.molF)}</td><td class="n">${r1(s.ojF)} mm</td><td class="n">${f(s.ul)} / ${f(s.ll)} mm</td><td>${s.score} ${tag}</td></tr>`}
   h+=`</table></div><div class="note">Incisors and lips: − = retraction, + = forward. Lip change from published lip : incisor ratios for ${esc(opt.lips)} lips (upper ${LIPK[opt.lips][0]}, lower ${LIPK[opt.lips][1]}). The space model is a simplified Tweed–Merrifield-style estimate; confirm with a diagnostic set-up.</div>`;
   const S=sims.find(s=>s.pat.id===sel);if(S&&S.pat.note)h+=`<div class="card" style="margin:8px 0 0"><b>${esc(S.pat.name)}</b> — ${esc(S.pat.note)}${I.ule!=null||I.lle!=null?`<div class="note">E-line after: upper lip ${I.ule!=null?r1(I.ule-S.ul):'—'} mm, lower lip ${I.lle!=null?r1(I.lle-S.ll):'—'} mm (ideal about −4 / −2).</div>`:''}</div>`;
-  $('#planner').innerHTML=h;updExtButtons()}
-$('#planner').addEventListener('change',e=>{if(e.target.name==='extpat'){cur.plan.extPat=e.target.value;save();renderPlanner();if(extView!=='before')showExtraction(extView);renderPred()}});
+  $('#planner').innerHTML=h}
+$('#planner').addEventListener('change',e=>{if(e.target.name==='extpat'){cur.plan.extPat=e.target.value;save();renderPlanner();renderPred()}});
 /* ---------- extraction in the 3D scans ---------- */
 let extView='before';
 function archNodes(side){const A=cur.models.auto&&cur.models.auto[side];if(!A)return null;const F=A.frame,pl=p=>{const d=[p[0]-F.c[0],p[1]-F.c[1],p[2]-F.c[2]];return[d3(d,F.e1),d3(d,F.e2),d3(d,F.e3)]};
@@ -1503,16 +1501,6 @@ function buildSetupRaw(pat,sim,delta){const A0=cur.models.auto||{},sides=['lower
   const av=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;res.dev={c:av(dv.c),m:av(dv.m),n:dv.c.length+dv.m.length};res.oj=SETUP.oj+delta;
   return res}
 
-function showExtraction(mode){extView=mode;for(const b of $$('#extViews button'))b.setAttribute('aria-pressed',b.dataset.v===mode);clearSeg();
-  if(mode==='seg'){$('#mHint').hidden=false;$('#mHint').textContent='Finding each tooth…';setTimeout(()=>{const ok=showSegmentation();$('#mHint').hidden=true;showToothMarks();$('#extNote').textContent=ok?'Each tooth in its own colour, gum in dark pink. If a crown is cut or includes gum, re-measure that tooth (its points steer the segmentation).':'Run ✨ Auto-measure teeth first.'},30);return}
-  const pat=PATTERNS.find(p=>p.id===(cur.plan.extPat||'4s'))||PATTERNS[1],sim=simulate(cur,pat,{anch:cur.plan.anchSim||'mod',lips:cur.plan.lipSim||'average'});let miss=[];
-  if(mode==='setup'){const S=buildSetup(pat,sim);if(!S){$('#extNote').textContent='Run ✨ Auto-measure teeth first so each tooth can be found on the models.';return}
-    for(const side of['upper','lower']){if(!origP[side])continue;if(S.meshes[side]&&S.meshes[side].length)mesh.set(side,S.meshes[side],COLORS[side]);else mesh.set(side,origP[side],COLORS[side])}showToothMarks();
-    const ar=S.arch;$('#extNote').innerHTML=ar?`<b>Final set-up — ${esc(pat.name)}</b>: every crown placed on an ideal arch (keeps inter-canine ${r1(ar.icw)} mm and inter-molar ${r1(ar.imw)} mm), curve of Spee levelled, incisors ${ar.move>0?r1(ar.move)+' mm back':ar.move<0?r1(-ar.move)+' mm forward':'in place'}${S.upper&&S.lower?`, overjet ${r1(S.oj??SETUP.oj)} mm${S.delta?` (upper arch moved ${S.delta>0?'forward':'back'} ${r1(Math.abs(S.delta))} mm to bring canines and molars closer to Class I — Andrews' first key)`:''}, overbite ${SETUP.ob} mm, upper buccal cusps ${SETUP.buccalOJ} mm outside the lowers`:''}; front teeth tip and torque set to Andrews' norms. ${S.notes.length?'Result: '+esc(S.notes.join(' · '))+'.':''}<div class="note">Crowns only (gums hidden). A planning illustration from the measured widths — check against a lab or software set-up before treatment.</div>`:esc(S.notes.join(' '));return}
-  for(const side of['upper','lower']){if(!origP[side])continue;const teeth=mode==='before'?[]:side==='upper'?pat.U:pat.L;if(teeth.length&&!(cur.models.auto&&cur.models.auto[side]))miss.push(side);
-    drawArch(side,miss.includes(side)?[]:teeth)}
-  showToothMarks();$('#extNote').textContent=(miss.length?'Run ✨ Auto-measure teeth first so the teeth can be located on the '+miss.join(' and ')+' model.':mode==='before'?'':`${pat.name}: crowns removed (${[...pat.U,...pat.L].join(', ')}).`)}
-function updExtButtons(){const ok=!!(cur.models.auto&&(cur.models.auto.upper||cur.models.auto.lower));for(const b of $$('#extViews button'))b.disabled=!ok&&b.dataset.v!=='before'}
 /* ---------- profile photo prediction ---------- */
 const PRED_PTS=[['Prn','Nose tip'],['Sn','Subnasale (under the nose)'],['Ls','Upper lip — most forward point'],['St','Stomion — where the lips meet'],['Li','Lower lip — most forward point'],['Sm','Labiomental fold (deepest point under the lower lip)'],['PogS','Soft-tissue chin — most forward point']];
 let predImg=null,predTap=-1;
@@ -1540,7 +1528,7 @@ const COLORS={upper:[0.93,0.86,0.72],lower:[0.78,0.84,0.93]};
 async function loadModel(side,file){try{$('#mEmpty').hidden=true;$('#mHint').hidden=false;$('#mHint').textContent='Loading '+side+' model…';
   let buf,name;if(file){buf=await file.arrayBuffer();name=file.name}else{const b=await DB.getBlob(cur.models[side].key);if(!b)throw new Error('File missing');buf=await b.arrayBuffer();name=cur.models[side].name}
   const P=parseModel(name,buf);if(file){const old=cur.models[side]&&cur.models[side].key;const k='b:'+uid();await DB.putBlob(k,file);cur.models[side]={key:k,name,tris:P.length/9};if(old)await DB.delBlob(old);save();updDots()}
-  origP[side]=P;delete segCache[side];mesh.set(side,P,COLORS[side]);$('#mHint').hidden=true;updMeshInfo();updExtButtons();showToothMarks()}catch(err){$('#mHint').hidden=true;toast('Could not open model: '+err.message);if(!Object.keys(mesh.meshes).length)$('#mEmpty').hidden=false}}
+  origP[side]=P;delete segCache[side];mesh.set(side,P,COLORS[side]);$('#mHint').hidden=true;updMeshInfo();showToothMarks()}catch(err){$('#mHint').hidden=true;toast('Could not open model: '+err.message);if(!Object.keys(mesh.meshes).length)$('#mEmpty').hidden=false}}
 function updMeshInfo(){const m=cur.models;$('#mEmpty').hidden=!mesh.fail&&!!(m.upper||m.lower);
   $('#mInfo').innerHTML=['upper','lower'].map(s=>`<div><b>${s==='upper'?'Upper':'Lower'}:</b> ${m[s]?esc(m[s].name)+' <span class="muted">('+(m[s].tris||0).toLocaleString()+' triangles)</span> <button class="btn sm danger" data-rm="'+s+'">Remove</button>':'not loaded'}</div>`).join('')}
 $('#mInfo').onclick=async e=>{const s=e.target.dataset.rm;if(!s)return;await DB.delBlob(cur.models[s].key);delete cur.models[s];delete origP[s];if(cur.models.auto)delete cur.models.auto[s];mesh.remove(s);mesh.render();save();updMeshInfo();updDots()};
