@@ -232,6 +232,14 @@ dialog::backdrop{background:#000a}
   <h2>Photographs</h2>
   <p class="note">Tap a box to add a photo, or drop / ⬆ Add files for several at once — JPEG, HEIC (iPhone), PNG, TIFF, BMP, WebP, PDF and DICOM all work. Tap a photo to view it with a facial grid, replace or remove it.</p>
   <div class="slots" id="slots"></div>
+  <h2>Smile simulation</h2>
+  <div class="card">
+    <div class="row"><button class="btn sm primary" id="smFind">✨ Find the smile</button><button class="btn sm" id="smHand">✏️ Outline the lips</button><button class="btn sm" id="smDone" hidden>Done</button><button class="btn sm" id="smShow" aria-pressed="false">Show lines</button><button class="btn sm" id="smPNG">⬇ Download</button></div>
+    <div class="row" style="margin:8px 0"><label class="f" style="flex:1">Whitening<input type="range" id="smWhite" min="0" max="100"></label><label class="f" style="flex:1">Straighten edges<input type="range" id="smStraight" min="0" max="100"></label>
+      <label class="note"><input type="checkbox" id="smCentre"> Centre midline</label><label class="note"><input type="checkbox" id="smGaps"> Close gaps</label></div>
+    <div class="note" id="smInfo"></div>
+    <canvas id="smCv" style="max-width:100%;border-radius:10px;display:block;touch-action:none;cursor:ew-resize;margin-top:6px"></canvas>
+  </div>
   <h2>Profile after treatment (prediction)</h2>
   <div class="card">
     <div class="note" id="predInfo"></div>
@@ -567,7 +575,7 @@ function renderCaseSel(){const s=$('#caseSel');s.innerHTML=cases.sort((a,b)=>(b.
 async function openCase(c){await saveNow();for(const u of urlCache.values())URL.revokeObjectURL(u);urlCache.clear();cur=c;
   for(const k of['photos','fx','models','occ','w','arch'])cur[k]=cur[k]||{};cur.ceph=cur.ceph||{pts:{}};cur.ceph.pts=cur.ceph.pts||{};cur.ceph.auto=cur.ceph.auto||{};cur.ceph.cv=cur.ceph.cv||{};cur.ceph.vert=cur.ceph.vert||{};vertStep=-1;cur.ceph.meas=cur.ceph.meas||[];q3=null;measMode=null;measPts=[];simWarp=null;if(simOn){simSetUI();simLoadPhoto().then(()=>{simReport();cephView.draw()})}cur.opg=cur.opg||{teeth:{},f:{}};cur.plan=cur.plan||{};cur.plan.sel=cur.plan.sel||[];cur.plan.refs=cur.plan.refs||[];cur.pt.h=cur.pt.h||{};
   try{localStorage.setItem('oa-last',c.id)}catch(e){}
-  renderCaseSel();bindAll();renderPhotos();renderWidths();renderAnalysis();renderBrushes();renderChart();lmIdx=nextMissing(0);extView='before';fillPopSelect();renderAutoInfo();renderPlanner();renderPred();renderLm();renderCephTable();renderLive(null);renderCvm();updDots();
+  renderCaseSel();bindAll();renderPhotos();renderWidths();renderAnalysis();renderBrushes();renderChart();lmIdx=nextMissing(0);extView='before';fillPopSelect();renderAutoInfo();renderPlanner();renderPred();smImg=null;smAfter=null;smTap=null;smRender();renderLm();renderCephTable();renderLive(null);renderCvm();updDots();
   cephView.setImage(null);opgView.setImage(null);mesh.clear();
   if(cur.ceph.img){blobURL(cur.ceph.img).then(u=>u&&loadImg(u)).then(i=>{if(i&&c===cur)cephView.setImage(i)}).catch(()=>{})}
   if(cur.opg.img){blobURL(cur.opg.img).then(u=>u&&loadImg(u)).then(i=>{if(i&&c===cur)opgView.setImage(i)}).catch(()=>{})}
@@ -719,7 +727,7 @@ let phSlot=null;
 $('#slots').onclick=e=>{const s=e.target.closest('.slot');if(!s)return;phSlot=s.dataset.slot;if(cur.photos[phSlot])openPv();else $('#phFile').click()};
 $('#slots').addEventListener('change',async e=>{if(e.target.id!=='phFile')return;const f=e.target.files[0];e.target.value='';if(f)await setPhoto(phSlot,f)});
 async function setPhoto(slot,f){try{const d=await decodeImage(f);await storePhoto(slot,d.blob)}catch(e){toast(f.name+': '+e.message)}}
-async function storePhoto(slot,blob){const old=cur.photos[slot];const k='b:'+uid();await DB.putBlob(k,blob);cur.photos[slot]=k;if(old)await DB.delBlob(old);saveNow();renderPhotos();updDots();if(slot==='ep'){predImg=null;if(cur.fx.pred)cur.fx.pred.pts={};renderPred()}}
+async function storePhoto(slot,blob){const old=cur.photos[slot];const k='b:'+uid();await DB.putBlob(k,blob);cur.photos[slot]=k;if(old)await DB.delBlob(old);saveNow();renderPhotos();updDots();if(slot==='es'){smImg=null;smAfter=null;smRender()}if(slot==='ep'){predImg=null;if(cur.fx.pred)cur.fx.pred.pts={};renderPred()}}
 async function openPv(){$('#pvImg').src=await blobURL(cur.photos[phSlot]);$('#pvTitle').textContent=SLOTS.find(s=>s[0]===phSlot)[1];$('#pvDlg').showModal()}
 $('#pvClose').onclick=()=>$('#pvDlg').close();
 $('#pvGrid').onclick=e=>{const on=e.target.getAttribute('aria-pressed')!=='true';e.target.setAttribute('aria-pressed',on);$('#pvBox').classList.toggle('grid',on)};
@@ -981,7 +989,17 @@ $('#mAuto').onclick=autoMeasure;
 
 $('#predCv').onclick=e=>{if(!predImg)return;const r=e.target.getBoundingClientRect(),pts=((cur.fx.pred=cur.fx.pred||{}).pts=cur.fx.pred.pts||{}),need=PRED_PTS.find(([p])=>!pts[p]);if(!need)return;
   pts[need[0]]=[(e.clientX-r.left)*predImg.width/r.width,(e.clientY-r.top)*predImg.height/r.height].map(r1);if(!num(cur.fx.predScale)){cur.fx.predScale=defaultScale();$('#predScale').value=cur.fx.predScale}saveNow();renderPred()};
-$('#predSplit').oninput=()=>renderPred();$('#predReset').onclick=()=>{if(cur.fx.pred)cur.fx.pred.pts={};saveNow();renderPred()};
+$('#predSplit').oninput=()=>renderPred();
+$('#smFind').onclick=smFind;
+$('#smHand').onclick=async()=>{if(!(await smLoad()))return toast('Add the "Face – frontal smile" photo first');smTap=[];$('#smDone').hidden=false;smRender()};
+$('#smDone').onclick=()=>{if(!smTap||smTap.length<6)return toast('Tap at least 6 points round the lips');const s=smState();s.poly=smTap;for(const k of['edge','gum','dmid'])delete s[k];smTap=null;$('#smDone').hidden=true;smAfter=null;save();smRender()};
+$('#smShow').onclick=e=>{smShow=!smShow;e.target.setAttribute('aria-pressed',smShow);smRender()};
+for(const[id,k]of[['smWhite','white'],['smStraight','straight']])$('#'+id).onchange=e=>{smState()[k]=+e.target.value;smAfter=null;save();smRender()};
+for(const[id,k]of[['smGaps','gaps'],['smCentre','centre']])$('#'+id).onchange=e=>{smState()[k]=e.target.checked;smAfter=null;save();smRender()};
+$('#smCv').addEventListener('pointerdown',e=>{if(!smImg)return;const[u,v]=smPt(e);if(smTap){smTap.push([r1(u*smImg.cv.width/smImg.sc),r1(v*smImg.cv.height/smImg.sc)]);smRender();return}if(!smAfter)return;smDragSplit=true;e.target.setPointerCapture(e.pointerId);smSplit=Math.max(0,Math.min(1,u));smRender()});
+$('#smCv').addEventListener('pointermove',e=>{if(!smDragSplit)return;smSplit=Math.max(0,Math.min(1,smPt(e)[0]));smRender()});
+$('#smCv').addEventListener('pointerup',()=>{smDragSplit=false});
+$('#smPNG').onclick=()=>{if(!smAfter)return toast('Make a simulation first');const a=document.createElement('a');a.href=smAfter.cv.toDataURL('image/jpeg',0.92);a.download=(cur.pt.name||'case').replace(/[^\w-]+/g,'_')+'-smile-simulation.jpg';a.click()};$('#predReset').onclick=()=>{if(cur.fx.pred)cur.fx.pred.pts={};saveNow();renderPred()};
 $('#predSave').onclick=()=>{$('#predCv').toBlob(b=>{if(!b)return;const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=(cur.pt.name||'patient').replace(/[^\w-]+/g,'_')+'-profile-prediction.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000)},'image/png')};
 $('#popSel').onchange=e=>setPop(e.target.value);$('#popLoc').onclick=locate;
 $('#cOutl').onclick=e=>{cephView.outline=cephView.outline===false;e.target.setAttribute('aria-pressed',cephView.outline);cephView.draw()};
@@ -1504,6 +1522,90 @@ function buildSetupRaw(pat,sim,delta){const A0=cur.models.auto||{},sides=['lower
 /* ---------- profile photo prediction ---------- */
 const PRED_PTS=[['Prn','Nose tip'],['Sn','Subnasale (under the nose)'],['Ls','Upper lip — most forward point'],['St','Stomion — where the lips meet'],['Li','Lower lip — most forward point'],['Sm','Labiomental fold (deepest point under the lower lip)'],['PogS','Soft-tissue chin — most forward point']];
 let predImg=null,predTap=-1;
+/* ---------- smile simulation (frontal smile photo) ----------
+   Claude finds the inner lip outline, the upper incisal edges, the gum line and the midlines; the photo is then changed
+   on this device: incisal edges evened onto a smile arc that follows the lower lip, dental midline centred, small gaps closed, teeth whitened. */
+let smImg=null,smBefore=null,smAfter=null,smSplit=0.5,smTap=null,smDragSplit=false,smShow=false;
+function smState(){const s=cur.fx.smile=cur.fx.smile||{};if(s.key!==cur.photos.es){for(const k of['poly','edge','gum','dmid','fmid'])delete s[k];s.key=cur.photos.es}
+  if(s.white==null)s.white=60;if(s.straight==null)s.straight=80;if(s.gaps==null)s.gaps=true;if(s.centre==null)s.centre=true;return s}
+async function smLoad(){const k=cur.photos.es;if(!k){smImg=null;return false}if(smImg&&smImg.key===k)return true;try{const im=await loadImg(await blobURL(k)),W=Math.min(1000,im.width),sc=W/im.width,cv=document.createElement('canvas');cv.width=W;cv.height=Math.round(im.height*sc);cv.getContext('2d').drawImage(im,0,0,cv.width,cv.height);smImg={key:k,im,sc,cv};smAfter=null;return true}catch(e){smImg=null;return false}}
+const SM_SCHEMA={type:'object',properties:{is_smile:{type:'boolean'},inner_lip:{type:'array',items:XY},upper_incisal:{type:'array',items:XY},upper_gum:{type:'array',items:XY},dental_midline_x:{type:'number'},facial_midline_x:{type:'number'},note:{type:'string'}},required:['is_smile','inner_lip','upper_incisal','upper_gum','dental_midline_x','facial_midline_x','note'],additionalProperties:false};
+async function smFind(){if(!(await smLoad()))return toast('Add the "Face – frontal smile" photo first');if(!lsGet('oa-claude-key')&&!(await askKey()))return;
+  if(lsGet('oa-ai-okface')!=='1'){if(!confirm('This sends the smile photo (no name or other details) from this device to Claude AI (Anthropic) to find the lips and teeth. Continue?'))return;lsSet('oa-ai-okface','1')}
+  const b=$('#smFind');b.disabled=true;$('#smInfo').textContent='Finding the lips and teeth…';
+  try{const c=smImg.cv,url=c.toDataURL('image/jpeg',0.9),prompt=`This is a frontal photograph of a person smiling, ${c.width} x ${c.height} pixels. Give, in image pixels (x from the left, y from the top):
+- inner_lip: 16 to 30 points going all the way round the opening of the mouth along the INNER edge of the lips (the border between lips and teeth / gums / dark mouth space), starting at the left mouth corner and going clockwise;
+- upper_incisal: 7 to 15 points along the biting edges of the visible UPPER teeth from left to right (incisal edges of incisors, canine cusp tips, premolar cusp tips);
+- upper_gum: 7 to 15 points from left to right along the upper gum margin of the visible upper teeth (where teeth meet gum; if no gum shows, along the lower edge of the upper lip);
+- dental_midline_x: x of the contact between the two upper central incisors;
+- facial_midline_x: x of the facial midline (philtrum / nose tip / chin).
+Set is_smile to false if the teeth are not visible.`;
+    const key=lsGet('oa-claude-key'),r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-beta':'server-side-fallback-2026-07-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:CLAUDE_MODEL,max_tokens:8000,fallbacks:'default',output_config:{effort:'high',format:{type:'json_schema',schema:SM_SCHEMA}},messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:'image/jpeg',data:url.split(',')[1]}},{type:'text',text:prompt}]}]})});
+    const res=await r.json().catch(()=>({}));if(r.status===401||r.status===403)throw new Error('your Claude key was not accepted — check it in ⋯ → Claude AI key');if(!r.ok)throw new Error((res.error&&res.error.message)||'Claude AI error '+r.status);
+    if(res.stop_reason==='refusal')throw new Error('Claude AI declined this image');const o=JSON.parse((res.content||[]).filter(x=>x.type==='text').map(x=>x.text).join(''));
+    if(!o.is_smile||o.inner_lip.length<6)throw new Error('no teeth visible — use a photo with a natural smile, or ✏️ Outline the lips by hand');
+    const s=smState(),f=1/smImg.sc,P=a=>a.map(p=>[r1(p.x*f),r1(p.y*f)]);s.poly=P(o.inner_lip);s.edge=P(o.upper_incisal);s.gum=P(o.upper_gum);s.dmid=r1(o.dental_midline_x*f);s.fmid=r1(o.facial_midline_x*f);save();smAfter=null;smRender()}
+  catch(e){$('#smInfo').textContent='';toast('Smile: '+e.message)}finally{b.disabled=false}}
+/* piece-wise linear y(x) through points */
+function smLine(pts){const a=(pts||[]).slice().sort((p,q)=>p[0]-q[0]);return a.length<2?null:{x0:a[0][0],x1:a[a.length-1][0],at:x=>{if(x<=a[0][0])return a[0][1];for(let i=1;i<a.length;i++)if(x<=a[i][0]){const t=(x-a[i-1][0])/((a[i][0]-a[i-1][0])||1);return a[i-1][1]+(a[i][1]-a[i-1][1])*t}return a[a.length-1][1]}}}
+function smCompute(){const s=smState(),C=smImg.cv,W=C.width,H=C.height,sc=smImg.sc,src=C.getContext('2d').getImageData(0,0,W,H),S=src.data;
+  const poly=s.poly.map(p=>[p[0]*sc,p[1]*sc]),mc=document.createElement('canvas');mc.width=W;mc.height=H;const mx=mc.getContext('2d');mx.filter='blur(1.5px)';mx.fillStyle='#fff';mx.beginPath();poly.forEach((p,i)=>i?mx.lineTo(p[0],p[1]):mx.moveTo(p[0],p[1]));mx.closePath();mx.fill();
+  const MK=mx.getImageData(0,0,W,H).data,mk=i=>MK[i*4+3]/255;let bx0=W,bx1=0,by0=H,by1=0;for(const p of poly){bx0=Math.min(bx0,p[0]);bx1=Math.max(bx1,p[0]);by0=Math.min(by0,p[1]);by1=Math.max(by1,p[1])}
+  bx0=Math.max(0,Math.floor(bx0-2));bx1=Math.min(W-1,Math.ceil(bx1+2));by0=Math.max(0,Math.floor(by0-2));by1=Math.min(H-1,Math.ceil(by1+2));const mw=bx1-bx0,mh=by1-by0;
+  const Y=i=>0.299*S[i*4]+0.587*S[i*4+1]+0.114*S[i*4+2];
+  // tooth likeness from the photo itself: brighter than the mouth's middle value and not red (lips, gums, tongue)
+  const hist=new Float64Array(256);let nh=0;for(let y=by0;y<=by1;y+=2)for(let x=bx0;x<=bx1;x+=2){const i=y*W+x;if(mk(i)>0.5&&S[i*4]-S[i*4+1]<45){hist[Math.min(255,Math.round(Y(i)))]++;nh++}}
+  let T1=120;if(nh){let sum=0;for(let t=0;t<256;t++)sum+=t*hist[t];let wB=0,sB=0,best=-1;for(let t=0;t<256;t++){wB+=hist[t];if(!wB)continue;const wF=nh-wB;if(!wF)break;sB+=t*hist[t];const mB=sB/wB,mF=(sum-sB)/wF,v=wB*wF*(mB-mF)*(mB-mF);if(v>best){best=v;T1=t}}}T1=Math.max(50,T1-12);// Otsu: dark mouth space vs teeth
+  const tooth=(D,i)=>{const yy=0.299*D[i*4]+0.587*D[i*4+1]+0.114*D[i*4+2],rr=D[i*4]-D[i*4+1];return Math.max(0,Math.min(1,(yy-T1)/24))*Math.max(0,Math.min(1,(48-rr)/16))};// teeth are bright and not red (red − green is high for lips and gums, low even for yellow teeth)
+  // gum line and incisal edge per column (Claude's lines, else found from the pixels)
+  const top=new Float32Array(W).fill(NaN),autoE=new Float32Array(W).fill(NaN);
+  for(let x=bx0;x<=bx1;x++){let t=-1;for(let y=by0;y<=by1;y++)if(mk(y*W+x)>0.5){t=y;break}if(t<0)continue;top[x]=t;let inT=false,e=NaN;for(let y=t;y<=by1&&y<t+0.75*mh;y++){const tt=tooth(S,y*W+x)>0.5;if(tt)inT=true;else if(inT){e=y;break}}autoE[x]=e}
+  const gL=smLine(s.gum&&s.gum.map(p=>[p[0]*sc,p[1]*sc])),eL=smLine(s.edge&&s.edge.map(p=>[p[0]*sc,p[1]*sc]));
+  const gum=x=>gL&&x>=gL.x0-2&&x<=gL.x1+2?gL.at(x):top[x],edge=x=>eL&&x>=eL.x0&&x<=eL.x1?eL.at(x):autoE[x];
+  const ex0=eL?Math.max(bx0,eL.x0):bx0,ex1=eL?Math.min(bx1,eL.x1):bx1;
+  // ideal smile arc: symmetric about the facial midline, centrals lowest (consonant with the lower lip)
+  const fm=(s.fmid!=null?s.fmid*sc:(bx0+bx1)/2),dm=(s.dmid!=null?s.dmid*sc:fm);let A=0,B=0,Cc=0,Dd=0,E=0,n=0;
+  for(let x=Math.ceil(ex0);x<=ex1;x+=2){const e=edge(x);if(isNaN(e))continue;const u=(x-fm)*(x-fm);A+=u*u;B+=u;Cc+=e*u;Dd+=e;n++}
+  let a0=null,c0=0;if(n>4){const det=A*n-B*B;if(Math.abs(det)>1e-9){c0=(Cc*n-B*Dd)/det;a0=(Dd-c0*B)/n}}
+  const half=Math.max(10,(ex1-ex0)/2),cMin=-0.06*mw/(half*half);if(a0!=null&&c0>cMin){const m=Dd/n;c0=cMin;a0=m-c0*B/n}// flat or reverse smile → gentle consonant arc
+  const st=s.straight/100,dy=new Float32Array(W);if(a0!=null)for(let x=bx0;x<=bx1;x++){const e=edge(x);if(isNaN(e)||x<ex0||x>ex1)continue;const fade=Math.min(1,(x-ex0)/(0.06*mw),(ex1-x)/(0.06*mw));dy[x]=Math.max(-0.14*mh,Math.min(0.14*mh,(a0+c0*(x-fm)*(x-fm)-e)))*st*Math.max(0,fade)}
+  {const r=Math.max(2,Math.round(0.025*mw)),t=dy.slice();for(let x=bx0;x<=bx1;x++){let sm=0,k=0;for(let j=-r;j<=r;j++){const q=x+j;if(q>=bx0&&q<=bx1){sm+=t[q];k++}}dy[x]=sm/k}}
+  const dx0=s.centre?Math.max(-0.07*mw,Math.min(0.07*mw,fm-dm)):0,wx=x=>Math.max(0,Math.min(1,(x-bx0)/(0.22*mw),(bx1-x)/(0.22*mw)));
+  // warp (inverse mapping, bilinear)
+  const out=new ImageData(W,H),O=out.data;O.set(S);const band=0.18*mh;
+  const samp=(fx,fy,o)=>{fx=Math.max(0,Math.min(W-1.001,fx));fy=Math.max(0,Math.min(H-1.001,fy));const ix=Math.floor(fx),iy=Math.floor(fy),tx=fx-ix,ty=fy-iy,a=(iy*W+ix)*4;for(let ch=0;ch<3;ch++)O[o+ch]=(S[a+ch]*(1-tx)+S[a+4+ch]*tx)*(1-ty)+(S[a+W*4+ch]*(1-tx)+S[a+W*4+4+ch]*tx)*ty};
+  for(let y=by0;y<=by1;y++)for(let x=bx0;x<=bx1;x++){const i=y*W+x,m=mk(i);if(m<=0)continue;const sx=x-dx0*wx(x),xi=Math.round(Math.max(bx0,Math.min(bx1,sx))),g=gum(xi),e=edge(xi),d=dy[xi];let sy=y;
+    if(!isNaN(g)&&!isNaN(e)&&e>g+2&&d){const t2=e+d;if(y>g&&y<=t2)sy=g+(y-g)*(e-g)/Math.max(1,t2-g);else if(y>t2&&y<t2+band)sy=y-d*(1-(y-t2)/band)}
+    if((sx!==x||sy!==y)&&mk(Math.round(sy)*W+Math.round(sx))>0.97)samp(sx,sy,i*4)}// never pull lip colour into the mouth
+  // close small dark gaps between teeth, row by row inside the tooth band
+  const tw=new Float32Array(W*H);for(let y=by0;y<=by1;y++)for(let x=bx0;x<=bx1;x++){const i=y*W+x;if(mk(i)>0)tw[i]=tooth(O,i)}
+  if(s.gaps){const maxG=Math.max(3,0.06*mw);for(let y=by0;y<=by1;y++){let x=bx0;while(x<=bx1){const i=y*W+x;if(tw[i]>0.6&&x+1<=bx1&&tw[i+1]<=0.6){let k=x+1;while(k<=bx1&&tw[y*W+k]<=0.6)k++;
+      if(k<=bx1&&k-x-1<=maxG){const xm2=Math.round((x+k)/2),g=gum(xm2),e=edge(xm2)+(dy[xm2]||0);if(!isNaN(g)&&!isNaN(e)&&y>g+2&&y<e-2){const L=Math.max(bx0,x-2)*4+y*W*4,R=Math.min(bx1,k+2)*4+y*W*4;for(let q=x+1;q<k;q++){const t=(q-x)/(k-x),o=(y*W+q)*4;for(let ch=0;ch<3;ch++)O[o+ch]=O[L+ch]*(1-t)+O[R+ch]*t;tw[y*W+q]=1}}}x=k}else x++}}}
+  // whiten: less yellow, a little brighter
+  const sw=s.white/100;if(sw>0)for(let y=by0;y<=by1;y++)for(let x=bx0;x<=bx1;x++){const i=y*W+x,w=tw[i]*mk(i);if(w<=0)continue;const o=i*4,yy=0.299*O[o]+0.587*O[o+1]+0.114*O[o+2];
+    for(let ch=0;ch<3;ch++){let v=yy+(O[o+ch]-yy)*(1-0.75*sw);v=v+(255-v)*0.28*sw;if(ch===2)v+=6*sw;O[o+ch]=O[o+ch]+(Math.min(255,v)-O[o+ch])*w}}
+  // feathered edge back into the photo
+  for(let y=by0;y<=by1;y++)for(let x=bx0;x<=bx1;x++){const i=y*W+x,m=mk(i);if(m>0&&m<1){const o=i*4;for(let ch=0;ch<3;ch++)O[o+ch]=S[o+ch]+(O[o+ch]-S[o+ch])*m}}
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;cv.getContext('2d').putImageData(out,0,0);
+  return{cv,arc:a0!=null?{a0,c0,fm,x0:ex0,x1:ex1}:null,dx:dx0/sc,maxDy:Math.max(...Array.from(dy).map(Math.abs))/sc}}
+async function smRender(){const info=$('#smInfo'),cv=$('#smCv');if(!cur||!info)return;if(!(await smLoad())){info.innerHTML='Add the <b>Face – frontal smile</b> photo above, then press ✨ Find the smile.';cv.width=cv.height=0;return}
+  const s=smState();for(const[id,k]of[['smWhite','white'],['smStraight','straight']])$('#'+id).value=s[k];$('#smGaps').checked=s.gaps;$('#smCentre').checked=s.centre;
+  const C=smImg.cv;cv.width=C.width;cv.height=C.height;const x=cv.getContext('2d');
+  if(smTap){x.drawImage(C,0,0);x.strokeStyle='#22d3ee';x.fillStyle='#22d3ee';x.lineWidth=2;x.beginPath();smTap.forEach((p,i)=>{const q=[p[0]*smImg.sc,p[1]*smImg.sc];i?x.lineTo(q[0],q[1]):x.moveTo(q[0],q[1])});x.stroke();for(const p of smTap){x.beginPath();x.arc(p[0]*smImg.sc,p[1]*smImg.sc,4,0,7);x.fill()}
+    info.innerHTML=`Tap round the inside edge of the lips (where lips meet teeth and gums) — ${smTap.length} point${smTap.length===1?'':'s'} so far. Press <b>Done</b> when you are back at the start.`;return}
+  if(!s.poly){x.drawImage(C,0,0);info.innerHTML='Press <b>✨ Find the smile</b> (Claude AI finds the lips and teeth), or <b>✏️ Outline the lips</b> by hand.';return}
+  if(!smAfter){info.textContent='Working…';await new Promise(r=>setTimeout(r,20));smAfter=smCompute()}
+  const W=C.width,H=C.height,sp=Math.round(W*smSplit);x.drawImage(smAfter.cv,0,0);x.drawImage(C,0,0,sp,H,0,0,sp,H);
+  if(smShow){x.lineWidth=2;x.strokeStyle='#22d3ee';x.beginPath();s.poly.forEach((p,i)=>{i?x.lineTo(p[0]*smImg.sc,p[1]*smImg.sc):x.moveTo(p[0]*smImg.sc,p[1]*smImg.sc)});x.closePath();x.stroke();
+    if(s.edge){x.strokeStyle='#facc15';x.beginPath();s.edge.slice().sort((a,b)=>a[0]-b[0]).forEach((p,i)=>{i?x.lineTo(p[0]*smImg.sc,p[1]*smImg.sc):x.moveTo(p[0]*smImg.sc,p[1]*smImg.sc)});x.stroke()}
+    const a=smAfter.arc;if(a){x.strokeStyle='#22c55e';x.setLineDash([5,4]);x.beginPath();for(let q=a.x0;q<=a.x1;q+=3){const yv=a.a0+a.c0*(q-a.fm)*(q-a.fm);q===a.x0?x.moveTo(q,yv):x.lineTo(q,yv)}x.stroke();x.setLineDash([])}
+    if(s.fmid!=null){x.strokeStyle='#f472b6';x.beginPath();x.moveTo(s.fmid*smImg.sc,0);x.lineTo(s.fmid*smImg.sc,H);x.stroke()}}
+  x.strokeStyle='#fff';x.lineWidth=3;x.beginPath();x.moveTo(sp,0);x.lineTo(sp,H);x.stroke();x.fillStyle='#fff';x.beginPath();x.arc(sp,H/2,16,0,7);x.fill();x.fillStyle='#111';x.font='bold 16px sans-serif';x.textAlign='center';x.fillText('⇆',sp,H/2+6);x.textAlign='left';
+  x.font='bold 15px sans-serif';x.lineWidth=3;x.strokeStyle='#000';x.fillStyle='#fff';x.strokeText('Original',10,24);x.fillText('Original',10,24);x.strokeText('Simulated',W-90,24);x.fillText('Simulated',W-90,24);
+  const mm=smAfter;info.innerHTML=`Drag across the photo to compare. Incisal edges evened by up to ${Math.round(mm.maxDy)} px onto a smile arc that follows the lower lip${s.centre&&Math.abs(mm.dx)>=1?`, dental midline moved ${Math.round(Math.abs(mm.dx))} px to the facial midline`:''}${s.gaps?', small gaps closed':''}${s.white?', teeth whitened':''}. A picture to discuss the goal — not a promise of the result.`}
+function smPt(e){const r=$('#smCv').getBoundingClientRect();return[(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height]}
+
 async function renderPred(){if(!cur||!$('#predCv'))return;const k=cur.photos.ep;if(!k){$('#predInfo').innerHTML='Add the profile photo (Face – profile) above to see the predicted profile.';const c=$('#predCv');c.width=c.height=0;return}
   if(!predImg||predImg.key!==k){try{predImg=await loadImg(await blobURL(k));predImg.key=k}catch(e){return}}
   const pts=(cur.fx.pred||{}).pts||{},need=PRED_PTS.filter(([p])=>!pts[p]);
