@@ -160,6 +160,7 @@ dialog::backdrop{background:#000a}
   #report.one .fine{font-size:8.5px;color:#555;margin-top:6px}
   @page{size:A4;margin:12mm}
 }
+.zoomer{display:inline-flex;gap:2px}.zoomer .btn{font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
@@ -367,6 +368,7 @@ dialog::backdrop{background:#000a}
     <button class="btn sm" id="cRul" aria-pressed="false" title="Tap two points — the distance is drawn on the X-ray">📏 Ruler</button>
     <button class="btn sm" id="cAng" aria-pressed="false" title="Tap three points: end, corner, end">∠ Angle</button>
     <button class="btn sm" id="cMag" aria-pressed="true" title="Zoom circle while you place or drag a point">🔍 Magnifier</button>
+    <span class="zoomer"><button class="btn sm" id="cZOut" title="Zoom out" aria-label="Zoom out">−</button><button class="btn sm" id="cZPct" title="Back to 100% (fit)" style="min-width:58px">100%</button><button class="btn sm" id="cZIn" title="Zoom in" aria-label="Zoom in">+</button></span>
     <button class="btn sm" id="cFit">Fit</button>
     <button class="btn sm" id="cEdit" title="Crop / rotate — landmarks move with the picture">✂️ Edit</button>
     <button class="btn sm" id="cSim" aria-pressed="false" title="Camouflage treatment simulation: move the incisors, see the lips follow">🎯 Simulate</button>
@@ -424,6 +426,7 @@ dialog::backdrop{background:#000a}
     <label class="note">☀︎ <input type="range" id="oBri" min="0.4" max="2" step="0.05" value="1"></label>
     <label class="note">◐ <input type="range" id="oCon" min="0.4" max="2.5" step="0.05" value="1"></label>
     <button class="btn sm" id="oInv" aria-pressed="false">Invert</button>
+    <span class="zoomer"><button class="btn sm" id="oZOut" title="Zoom out" aria-label="Zoom out">−</button><button class="btn sm" id="oZPct" title="Back to 100% (fit)" style="min-width:58px">100%</button><button class="btn sm" id="oZIn" title="Zoom in" aria-label="Zoom in">+</button></span>
     <button class="btn sm" id="oFit">Fit</button>
     <button class="btn sm" id="oEdit">✂️ Edit</button>
   </div>
@@ -811,7 +814,7 @@ class ImgView{
   get dpr(){return window.devicePixelRatio||1}
   resize(keep){const r=this.stage.getBoundingClientRect();if(!r.width)return;const w=Math.round(r.width*this.dpr),h=Math.round(r.height*this.dpr);if(w===this.cv.width&&h===this.cv.height&&keep)return;this.cv.width=w;this.cv.height=h;this.fit()}
   setImage(img){this.img=img;this.o.empty&&(this.o.empty.hidden=!!img);this.resize();this.fit()}
-  fit(){if(!this.img){this.draw();return}const w=this.cv.width,h=this.cv.height;this.s=Math.min(w/this.img.width,h/this.img.height)*0.96;this.ox=(w-this.img.width*this.s)/2;this.oy=(h-this.img.height*this.s)/2;this.draw()}
+  fit(){if(!this.img){this.draw();return}const w=this.cv.width,h=this.cv.height;this.s=this.fitS=Math.min(w/this.img.width,h/this.img.height)*0.96;this.ox=(w-this.img.width*this.s)/2;this.oy=(h-this.img.height*this.s)/2;this.draw()}
   cpx(e){const r=this.cv.getBoundingClientRect();return[(e.clientX-r.left)*this.dpr,(e.clientY-r.top)*this.dpr]}
   toImg([x,y]){return[(x-this.ox)/this.s,(y-this.oy)/this.s]}
   toScr([x,y]){return[x*this.s+this.ox,y*this.s+this.oy]}
@@ -826,9 +829,9 @@ class ImgView{
     if(this.ptrs.size===0){this.cursor=null;const dr=this.drag;this.drag=null;if(!this.moved&&this.btn===0&&this.o.onTap)this.o.onTap(this.toImg(p));else if(dr&&this.o.onDrop)this.o.onDrop(dr);this.draw()}}
   draw(){const c=this.ctx,w=this.cv.width,h=this.cv.height;c.setTransform(1,0,0,1,0,0);c.clearRect(0,0,w,h);if(!this.img)return;
     c.filter=`brightness(${this.bri}) contrast(${this.con})${this.inv?' invert(1)':''}`;c.setTransform(this.s,0,0,this.s,this.ox,this.oy);c.drawImage(this.img,0,0);c.filter='none';c.setTransform(1,0,0,1,0,0);
-    this.o.overlay&&this.o.overlay(c,this)}
+    this.o.overlay&&this.o.overlay(c,this);this.o.zoomLabel&&(this.o.zoomLabel.textContent=Math.round(100*this.s/(this.fitS||this.s))+'%')}
 }
-function imgControls(view,p){$('#'+p+'Bri').oninput=e=>{view.bri=+e.target.value;view.draw()};$('#'+p+'Con').oninput=e=>{view.con=+e.target.value;view.draw()};
+function imgControls(view,p){const zc=f=>view.img&&view.zoomAt(view.cv.width/2,view.cv.height/2,f);view.o.zoomLabel=$('#'+p+'ZPct');$('#'+p+'ZIn').onclick=()=>zc(1.4);$('#'+p+'ZOut').onclick=()=>zc(1/1.4);$('#'+p+'ZPct').onclick=()=>view.fit();$('#'+p+'Bri').oninput=e=>{view.bri=+e.target.value;view.draw()};$('#'+p+'Con').oninput=e=>{view.con=+e.target.value;view.draw()};
   $('#'+p+'Inv').onclick=e=>{view.inv=!view.inv;e.target.setAttribute('aria-pressed',view.inv);view.draw()};$('#'+p+'Fit').onclick=()=>view.fit()}
 async function setXray(which,f,view){try{const d=await decodeImage(f);if(which==='ceph'&&Object.keys(cur.ceph.pts).length&&!confirm('Keep the landmarks already placed? (Cancel clears them)')){cur.ceph.pts={};cur.ceph.auto={}}await storeXray(which,d,view)}catch(e){toast(f.name+': '+e.message)}}
 async function storeXray(which,d,view){const old=cur[which].img;const k='b:'+uid();await DB.putBlob(k,d.blob);cur[which].img=k;
