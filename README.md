@@ -1,6 +1,6 @@
 # Ortho Assess
 
-Orthodontic case assessment that runs in the browser — one HTML file, no build step, no server.
+Orthodontic case assessment that runs in the browser — one HTML file, no build step. Optional sync through the clinic server.
 
 **Open it:** https://destiny4424-netizen.github.io/ortho-assess/ (later: https://ortho.handraldentistry.com)
 
@@ -24,12 +24,14 @@ Orthodontic case assessment that runs in the browser — one HTML file, no build
 - ✂️ Edit crops, rotates, straightens and flips photos, cephs and OPGs; ceph landmarks move with the picture.
 
 ## Privacy
-Every record — details, photos, scans, X-rays — is kept only in the browser on the device that made it
-(IndexedDB). Nothing is uploaded, except that ✨ Auto-detect sends the X-ray image (no name or details) to
-Anthropic, using the Claude key you save in ⋯ → Claude AI key (kept only on that device).
+Every record — details, photos, scans, X-rays — is kept in the browser on the device (IndexedDB).
+**☁️ Sync (optional):** sign in with a clinic login and the cases are also kept on the clinic's own server
+(`_clinic/server.py` in destiny4424-netizen/handraldentistry-website, `ortho.db` on the droplet), so every
+phone and computer signed in with that login sees the same cases. Each login sees only its own cases.
+Large files go up in 8 MB pieces; files are fetched on another device the first time they are opened.
+Signed out, nothing is uploaded — except that ✨ Auto-detect / Auto-measure / Find the smile send the image
+(no name or details) to Anthropic, using the Claude key you save in ⋯ → Claude AI key (kept only on that device).
 Never commit patient photos, X-rays, scans, records, names or a Claude key to this public repository.
-Use ⋯ → Export all cases for a backup, and ⋯ → Import to load it on another device or address.
-
-Ortho Assess is separate from the clinic website, clinic app and clinic server.
+Use ⋯ → Export this case for a backup file, and ⋯ → Import to load it on another device.
 
 Decision-support only: treatment decisions rest with the treating orthodontist.
