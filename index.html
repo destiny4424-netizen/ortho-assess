@@ -171,6 +171,7 @@ dialog::backdrop{background:#000a}
     <label class="btn" title="Photos, scans, X-rays — any format, several at once"><input type="file" id="addAny" multiple hidden>⬆ Add files</label>
     <button class="btn" id="printBtn" title="Save as PDF or print">⬇ Export PDF</button>
     <button class="btn" id="themeBtn" title="Light / dark mode" aria-label="Light or dark mode">◐</button>
+    <button class="btn" id="syncBtn" title="Sync cases with the clinic server">☁️</button>
     <button class="btn" id="moreBtn" aria-label="More">⋯</button>
   </div>
   <nav id="tabs" role="tablist">
@@ -224,7 +225,7 @@ dialog::backdrop{background:#000a}
       <label class="f">Prefers<select data-k="pt.pref"><option value="">No preference</option><option>Clear aligners</option><option>Fixed braces</option><option>Lingual / hidden</option></select></label>
     </div>
   </div>
-  <p class="note">Everything in this app — details, photos, scans and X-rays — is saved only on this device (in this browser). Nothing is uploaded. Use ⋯ → Export case to keep a backup copy.</p>
+  <p class="note">Everything in this app — details, photos, scans and X-rays — is saved on this device (in this browser). Tap ☁️ and sign in with your clinic login to also keep cases on the clinic server and open them on any phone or computer; signed out, nothing is uploaded. Use ⋯ → Export case for a backup file.</p>
 </section>
 
 <!-- PHOTOS -->
@@ -485,6 +486,19 @@ dialog::backdrop{background:#000a}
 <dialog id="pvDlg"><div class="pv" id="pvBox"><img id="pvImg" alt=""><svg class="gridov" viewBox="0 0 100 100" preserveAspectRatio="none"><g stroke="#0ff" stroke-width=".25" fill="none" opacity=".85"><line x1="50" y1="0" x2="50" y2="100"/><line x1="0" y1="33.3" x2="100" y2="33.3"/><line x1="0" y1="66.6" x2="100" y2="66.6"/><line x1="25" y1="0" x2="25" y2="100" stroke-dasharray="1 1"/><line x1="75" y1="0" x2="75" y2="100" stroke-dasharray="1 1"/></g></svg></div>
   <div class="row" style="padding:10px"><b id="pvTitle" style="flex:1"></b><button class="btn sm" id="pvGrid" aria-pressed="false">Grid</button><button class="btn sm" id="pvEdit">✂️ Edit</button><label class="btn sm"><input type="file" id="pvRep" hidden>Replace</label><button class="btn sm danger" id="pvDel">Remove</button><button class="btn sm primary" id="pvClose">Close</button></div></dialog>
 
+<dialog id="syncDlg"><div style="padding:16px;display:flex;flex-direction:column;gap:10px;width:min(420px,calc(100vw - 32px))">
+  <b>☁️ Cases on any device</b>
+  <div class="note" id="syncInfo"></div>
+  <div id="syncIn" style="display:flex;flex-direction:column;gap:8px">
+    <input class="btn" id="syncUser" placeholder="Clinic username" autocomplete="username" autocapitalize="none">
+    <input class="btn" id="syncPw" type="password" placeholder="Password" autocomplete="current-password">
+    <details><summary class="note">Server address</summary><input class="btn" id="syncUrl" style="width:100%" placeholder="https://clinicapi.handraldentistry.com"></details>
+    <button class="btn primary" id="syncGo">Sign in</button>
+  </div>
+  <div id="syncOut" class="row"><button class="btn primary" id="syncRun">⟳ Sync now</button><button class="btn" id="syncOff">Sign out</button></div>
+  <button class="btn" onclick="this.closest('dialog').close()">Close</button>
+</div></dialog>
+
 <dialog id="moreDlg"><div style="padding:16px;display:flex;flex-direction:column;gap:8px">
   <b>Case</b>
   <button class="btn" id="waBtn">📲 Get files from WhatsApp</button>
@@ -548,7 +562,7 @@ function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clea
 function getP(o,p){return p.split('.').reduce((a,k)=>a==null?undefined:a[k],o)}
 function setP(o,p,v){const ks=p.split('.');let a=o;for(let i=0;i<ks.length-1;i++){if(a[ks[i]]==null||typeof a[ks[i]]!=='object')a[ks[i]]={};a=a[ks[i]]}a[ks[ks.length-1]]=v}
 
-/* ---------- storage (IndexedDB, on this device only) ---------- */
+/* ---------- storage (IndexedDB on this device; optional sync with the clinic server below) ---------- */
 const DB={db:null,mem:{cases:new Map(),blobs:new Map()},
   open(){return new Promise(res=>{try{const r=indexedDB.open('ortho-assess',1);r.onupgradeneeded=()=>{const d=r.result;d.createObjectStore('cases',{keyPath:'id'});d.createObjectStore('blobs')};r.onsuccess=()=>{this.db=r.result;res()};r.onerror=()=>res()}catch(e){res()}})},
   tx(st,mode,fn){if(!this.db){const m=this.mem[st];return Promise.resolve(fn({getAll:()=>({result:[...m.values()]}),put:(v,k)=>m.set(k??v.id,v),get:k=>({result:m.get(k)}),delete:k=>m.delete(k)})?.result)}
@@ -563,11 +577,64 @@ const DB={db:null,mem:{cases:new Map(),blobs:new Map()},
 let cases=[], cur=null, saveT=null;
 const urlCache=new Map();
 function blankCase(){return{id:uid(),created:Date.now(),pt:{name:'',h:{}},photos:{},fx:{},models:{},occ:{},w:{},arch:{},ceph:{pts:{},auto:{}},opg:{teeth:{},f:{}},plan:{sel:[],refs:[]}}}
-function save(){if(!cur)return;clearTimeout(saveT);saveT=setTimeout(()=>{cur.updated=Date.now();DB.put(cur).catch(e=>toast('Could not save: '+e.message))},250)}
+function save(){if(!cur)return;clearTimeout(saveT);saveT=setTimeout(()=>{cur.updated=Date.now();DB.put(cur).then(()=>syncSoon()).catch(e=>toast('Could not save: '+e.message))},250)}
 function saveNow(){clearTimeout(saveT);if(cur)return DB.put(cur)}
 async function blobURL(k){if(!k)return null;if(urlCache.has(k))return urlCache.get(k);const b=await DB.getBlob(k);if(!b)return null;const u=URL.createObjectURL(b);urlCache.set(k,u);return u}
 function loadImg(u){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('Could not open image'));i.src=u})}
 function blobRefs(c){const r=[];for(const s in c.photos)if(c.photos[s])r.push([c.photos,s]);for(const s of['upper','lower'])if(c.models[s])r.push([c.models[s],'key']);if(c.ceph.img)r.push([c.ceph,'img']);if(c.opg.img)r.push([c.opg,'img']);return r}
+
+/* ---------- sync with the clinic server (optional) ----------
+   After signing in with the clinic login, cases (with their photos, scans and X-rays) are also kept on the clinic's own
+   server, so every phone and computer signed in with that login sees the same cases. Signed out, nothing leaves the device. */
+const SYNC_DEFAULT='https://clinicapi.handraldentistry.com',SYNC_PART=8*1024*1024;
+let syncBusy=null,syncSoonT=null;
+const sy={get url(){return (lsGet('oa-sync-url')||SYNC_DEFAULT).replace(/\/+$/,'')},get tok(){return lsGet('oa-sync-token')},get user(){return lsGet('oa-sync-user')}};
+const syncJ=(k,d)=>{try{const v=JSON.parse(lsGet(k)||'null');return v==null?d:v}catch(e){return d}};
+async function syncApi(path,o={}){const h={Authorization:'Bearer '+sy.tok};let body=o.body;if(o.json){h['Content-Type']='application/json';body=JSON.stringify(o.json)}else if(body)h['Content-Type']='application/octet-stream';
+  let r;try{r=await fetch(sy.url+path,{method:o.method||'GET',headers:h,body})}catch(e){throw new Error('cannot reach the clinic server — check the internet')}
+  if(r.status===401){lsSet('oa-sync-token',null);setSync();throw new Error('please sign in again')}
+  const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||('server error '+r.status));return d}
+const syncBlank=c=>!(c.pt&&c.pt.name)&&!blobRefs(c).length;
+async function syncUpBlob(k,b){const n=Math.max(1,Math.ceil(b.size/SYNC_PART));for(let i=0;i<n;i++)
+  await syncApi(`/api/ortho/blob?k=${encodeURIComponent(k)}&i=${i}&n=${n}&mime=${encodeURIComponent(b.type||'application/octet-stream')}`,{method:'POST',body:b.slice(i*SYNC_PART,(i+1)*SYNC_PART)})}
+function setSync(state,msg){const b=$('#syncBtn');if(!b)return;state=state||(sy.tok?'ok':'off');b.textContent={off:'☁️',ok:'☁️✓',busy:'☁️…',err:'☁️⚠'}[state];
+  b.title=state==='off'?'Sync cases with the clinic server':state==='err'?'Sync problem: '+msg:state==='busy'?'Syncing…':'Synced with the clinic server';if(state==='err')lsSet('oa-sync-err',msg);else if(state==='ok')lsSet('oa-sync-err',null);if($('#syncDlg').open)renderSyncDlg()}
+function syncSoon(){if(!sy.tok)return;clearTimeout(syncSoonT);syncSoonT=setTimeout(()=>syncNow(),8000)}
+function syncNow(first){if(!sy.tok)return Promise.resolve();if(syncBusy)return syncBusy;syncBusy=(async()=>{setSync('busy');try{
+    await saveNow();const pushed=syncJ('oa-sync-pushed',{});
+    const dels=syncJ('oa-sync-del',[]);if(dels.length){await syncApi('/api/ortho/cases',{method:'POST',json:{cases:dels.map(d=>({id:d.id,deleted:true,updated:d.updated}))}});
+      const keys=dels.flatMap(d=>d.keys||[]);for(let i=0;i<keys.length;i+=400)await syncApi('/api/ortho/blobs/delete',{method:'POST',json:{keys:keys.slice(i,i+400)}});lsSet('oa-sync-del','[]')}
+    const todo=cases.filter(c=>!syncBlank(c)&&(c.updated||c.created)>(pushed[c.id]||0));
+    if(todo.length){const have=new Set((await syncApi('/api/ortho/blobs')).keys);
+      for(const c of todo){for(const[o,p]of blobRefs(c)){const k=o[p];if(!k||have.has(k))continue;const b=await DB.getBlobLocal(k);if(!b)continue;await syncUpBlob(k,b);have.add(k)}
+        const t=c.updated||c.created;await syncApi('/api/ortho/cases',{method:'POST',json:{cases:[{id:c.id,updated:t,data:c}]}});pushed[c.id]=t;lsSet('oa-sync-pushed',JSON.stringify(pushed))}}
+    let rev=+(lsGet('oa-sync-rev')||0),more=true,reopen=null;
+    while(more){const r=await syncApi('/api/ortho/cases?since='+rev);
+      for(const x of r.cases){const loc=cases.find(c=>c.id===x.id),lt=loc?(loc.updated||loc.created):-1;
+        if(x.deleted){if(loc&&lt<=x.updated){for(const[o,p]of blobRefs(loc))await DB.delBlob(o[p]);await DB.del(loc.id);cases=cases.filter(c=>c!==loc);if(loc===cur)reopen='gone'}continue}
+        if(loc&&lt>=x.updated)continue;const c=x.data;c.updated=x.updated;await DB.put(c);pushed[c.id]=x.updated;if(loc)cases[cases.indexOf(loc)]=c;else cases.push(c);if(loc===cur)reopen=c}
+      rev=r.rev;more=r.more;lsSet('oa-sync-rev',String(rev))}
+    lsSet('oa-sync-pushed',JSON.stringify(pushed));
+    // a fresh device starts with one empty case: drop it once real cases have arrived
+    if(first&&cur&&syncBlank(cur)&&cases.length>1&&reopen==null){const e=cur;await DB.del(e.id);cases=cases.filter(c=>c!==e);reopen='gone'}
+    if(reopen==='gone'){cur=null;if(cases.length)await openCase(cases.sort((a,b)=>(b.updated||b.created)-(a.updated||a.created))[0]);else await newCase()}
+    else if(reopen){cur=null;await openCase(reopen)}else renderCaseSel();
+    lsSet('oa-sync-at',String(Date.now()));setSync('ok')}catch(e){setSync('err',e.message)}finally{syncBusy=null}})();return syncBusy}
+function syncNoteDelete(c){if(!sy.tok&&!syncJ('oa-sync-pushed',{})[c.id])return;const d=syncJ('oa-sync-del',[]);d.push({id:c.id,updated:Date.now(),keys:blobRefs(c).map(([o,p])=>o[p]).filter(Boolean)});lsSet('oa-sync-del',JSON.stringify(d))}
+function renderSyncDlg(){const on=!!sy.tok;$('#syncIn').hidden=on;$('#syncOut').hidden=!on;const at=+lsGet('oa-sync-at'),err=lsGet('oa-sync-err');
+  $('#syncInfo').innerHTML=on?`Signed in as <b>${esc(sy.user||'')}</b>. ${cases.filter(c=>!syncBlank(c)).length} case(s) on this device.${at?' Last synced '+new Date(at).toLocaleString()+'.':''}${err?`<br><span class="tag t-bad">${esc(err)}</span>`:''}<br>Every phone and computer signed in with this login sees the same cases. Cases are kept on the clinic server and on each signed-in device.`
+    :'Sign in with your <b>clinic login</b> (the same username and password as the clinic app) to keep your cases on the clinic server and open them on any phone or computer.<br>Sign in first on the device that has your old cases — they upload automatically.';
+  $('#syncUrl').value=sy.url}
+async function syncLogin(){const u=$('#syncUser').value.trim(),p=$('#syncPw').value,url=$('#syncUrl').value.trim().replace(/\/+$/,'')||SYNC_DEFAULT;if(!u||!p)return toast('Enter the username and password');
+  const b=$('#syncGo');b.disabled=true;try{let r;try{r=await fetch(url+'/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})})}catch(e){throw new Error('cannot reach '+url)}
+    const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'sign-in failed');
+    if(lsGet('oa-sync-who')!==String(d.user.id)+'@'+url){lsSet('oa-sync-pushed',null);lsSet('oa-sync-rev',null);lsSet('oa-sync-del',null)}// another login: start fresh
+    lsSet('oa-sync-url',url===SYNC_DEFAULT?null:url);lsSet('oa-sync-token',d.token);lsSet('oa-sync-user',d.user.name||d.user.username);lsSet('oa-sync-who',String(d.user.id)+'@'+url);$('#syncPw').value='';
+    toast('Signed in — syncing your cases');renderSyncDlg();await syncNow(true);renderSyncDlg()}catch(e){toast('Sign-in: '+e.message)}finally{b.disabled=false}}
+async function syncLogout(){if(!confirm('Sign out? Cases stay on this device and on the clinic server; this device just stops syncing.'))return;try{await fetch(sy.url+'/api/logout',{method:'POST',headers:{Authorization:'Bearer '+sy.tok}})}catch(e){}lsSet('oa-sync-token',null);setSync();renderSyncDlg()}
+// photos, scans and X-rays not yet on this device are fetched from the clinic server when first opened
+DB.getBlobLocal=DB.getBlob;DB.getBlob=async k=>{const b=await DB.getBlobLocal(k);if(b||!k||!sy.tok)return b;
+  try{const r=await fetch(sy.url+'/api/ortho/blob?k='+encodeURIComponent(k),{headers:{Authorization:'Bearer '+sy.tok}});if(!r.ok)return undefined;const nb=await r.blob();await DB.putBlob(k,nb);return nb}catch(e){return undefined}};
 
 /* ---------- case list ---------- */
 function caseLabel(c){return (c.pt.name||'Unnamed case')+(c.pt.file?' · '+c.pt.file:'')}
@@ -587,9 +654,9 @@ async function newCase(){const c=blankCase();cases.push(c);await DB.put(c);await
 $('#newCase').onclick=newCase;
 $('#caseSel').onchange=e=>{const c=cases.find(x=>x.id===e.target.value);if(c)openCase(c)};
 $('#moreBtn').onclick=()=>$('#moreDlg').showModal();
-$('#delCase').onclick=async()=>{if(!cur||!confirm('Delete '+caseLabel(cur)+' and all its photos, scans and X-rays from this device?'))return;
-  for(const[o,p]of blobRefs(cur))await DB.delBlob(o[p]);await DB.del(cur.id);cases=cases.filter(c=>c!==cur);cur=null;$('#moreDlg').close();
-  if(!cases.length)await newCase();else await openCase(cases[0]);toast('Case deleted')};
+$('#delCase').onclick=async()=>{if(!cur||!confirm('Delete '+caseLabel(cur)+' and all its photos, scans and X-rays'+(sy.tok?' from this device and the clinic server?':' from this device?')))return;
+  syncNoteDelete(cur);for(const[o,p]of blobRefs(cur))await DB.delBlob(o[p]);await DB.del(cur.id);cases=cases.filter(c=>c!==cur);cur=null;$('#moreDlg').close();
+  if(!cases.length)await newCase();else await openCase(cases[0]);toast('Case deleted');syncSoon()};
 function blobToDataURL(b){return new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b)})}
 async function exportCases(list,fname){await saveNow();const blobs={},out=[];for(const c of list){out.push(c);for(const[o,p]of blobRefs(c)){const b=await DB.getBlob(o[p]);if(b)blobs[o[p]]=await blobToDataURL(b)}}
   const f=new Blob([JSON.stringify({app:'ortho-assess',v:2,cases:out,blobs})],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=fname;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}
@@ -2160,6 +2227,10 @@ addEventListener('pagehide',()=>saveNow());document.addEventListener('visibility
   let last=null;try{last=localStorage.getItem('oa-last')}catch(e){}
   if(!cases.length)await newCase();else await openCase(cases.find(c=>c.id===last)||cases[0]);
   takeShared();
+  $('#syncBtn').onclick=()=>{renderSyncDlg();$('#syncDlg').showModal()};$('#syncGo').onclick=syncLogin;$('#syncPw').onkeydown=e=>{if(e.key==='Enter')syncLogin()};
+  $('#syncRun').onclick=async()=>{await syncNow();renderSyncDlg();toast(lsGet('oa-sync-err')?'Sync problem: '+lsGet('oa-sync-err'):'Synced')};$('#syncOff').onclick=syncLogout;
+  setSync();if(sy.tok)syncNow();setInterval(()=>{if(document.visibilityState==='visible')syncNow()},90000);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow()});
   window.OA={cephView,mesh,analyze:()=>analyze(cur),cephMeasures:()=>cephMeasures(cur),get cur(){return cur}}})();
 </script>
 </body>
