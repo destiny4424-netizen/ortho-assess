@@ -242,6 +242,14 @@ dialog::backdrop{background:#000a}
     <div class="note" id="smInfo"></div>
     <canvas id="smCv" style="max-width:100%;border-radius:10px;display:block;touch-action:none;cursor:ew-resize;margin-top:6px"></canvas>
   </div>
+  <h2>Facial symmetry</h2>
+  <div class="card">
+    <div class="row"><select class="btn sm" id="fsSlot"><option value="ef">Frontal at rest</option><option value="es">Frontal smile</option></select><button class="btn sm primary" id="fsFind">✨ Find the points</button><button class="btn sm" id="fsReset">Clear points</button>
+      <label class="note">Interpupillary distance (mm) <input type="number" step="0.5" id="fsIpd" class="btn sm" style="width:70px"></label></div>
+    <div class="note" id="fsInfo" style="margin:6px 0"></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;align-items:start"><canvas id="fsCv" style="max-width:100%;border-radius:10px;display:block;touch-action:none;cursor:crosshair"></canvas><div id="fsOut"></div></div>
+    <div id="fsMirror" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:10px"></div>
+  </div>
   <h2>Profile after treatment (prediction)</h2>
   <div class="card">
     <div class="note" id="predInfo"></div>
@@ -354,6 +362,8 @@ dialog::backdrop{background:#000a}
     <button class="btn sm primary" id="cAI" title="Find all landmarks with Claude AI">✨ Auto-detect</button>
     <button class="btn sm" id="cQ3" aria-pressed="false" title="Tap S, N and Me — the rest are placed from an average skull">Quick place (3 taps)</button>
     <button class="btn sm" id="cOK" hidden>✓ Accept all</button>
+    <button class="btn sm" id="cUndo" disabled title="Undo the last landmark change (Ctrl+Z)">↶ Undo</button>
+    <button class="btn sm" id="cClrAuto" hidden title="Remove every landmark that Auto-detect or Quick place put down and you have not checked">✕ Remove auto points</button>
     <label class="note" title="Run ✨ Auto-detect as soon as a ceph is uploaded"><input type="checkbox" id="cInst"> ⚡ Instant</label>
     <select class="btn sm" id="cAnal" aria-label="Analysis"></select><button class="btn sm" id="anEdit" hidden title="Edit or delete this analysis">✎</button>
     <button class="btn sm" id="cCal" aria-pressed="false">Calibrate (ruler)</button>
@@ -525,10 +535,12 @@ dialog::backdrop{background:#000a}
   <div class="row"><b id="edTitle" style="flex:1">Edit picture</b><span class="note" id="edSize"></span></div>
   <canvas id="edCv" style="width:100%;height:min(62vh,560px);background:#0b0f14;border-radius:10px;touch-action:none;display:block"></canvas>
   <div class="row"><button class="btn sm" id="edL" title="Rotate left">⟲ 90°</button><button class="btn sm" id="edR" title="Rotate right">⟳ 90°</button><button class="btn sm" id="edFlip">⇋ Flip</button>
-    <label class="note" style="display:flex;align-items:center;gap:6px">Straighten <input type="range" id="edFine" min="-30" max="30" step="0.5" value="0" style="width:140px"><span id="edFineV">0°</span></label>
+    <label class="note" style="display:flex;align-items:center;gap:6px" title="Roll — turn the picture in its own plane (straighten a tilted head)">Roll <input type="range" id="edFine" min="-30" max="30" step="0.5" value="0" style="width:120px"><span id="edFineV">0°</span></label>
+    <label class="note" style="display:flex;align-items:center;gap:6px" title="Pitch — head tipped up or down towards the camera">Pitch <input type="range" id="edPitch" min="-30" max="30" step="0.5" value="0" style="width:120px"><span id="edPitchV">0°</span></label>
+    <label class="note" style="display:flex;align-items:center;gap:6px" title="Yaw — head turned left or right">Yaw <input type="range" id="edYaw" min="-30" max="30" step="0.5" value="0" style="width:120px"><span id="edYawV">0°</span></label>
     <select class="btn sm" id="edAspect"><option value="0">Free crop</option><option value="1">Square 1:1</option><option value="1.3333">4:3</option><option value="0.75">3:4 (portrait)</option><option value="1.5">3:2</option><option value="1.7778">16:9</option></select>
     <button class="btn sm" id="edReset">Reset</button><span style="flex:1"></span><button class="btn sm" id="edCancel">Cancel</button><button class="btn sm primary" id="edSave">Save</button></div>
-  <div class="note">Drag inside the box to move it, drag a corner to resize, or drag outside to draw a new crop.</div>
+  <div class="note">Drag inside the box to move it, drag a corner to resize, or drag outside to draw a new crop. Roll turns the picture; Pitch and Yaw correct a head tipped up/down or turned sideways (perspective), trimming the empty corners.</div>
 </div></dialog>
 <dialog id="waDlg"><div style="padding:16px;display:flex;flex-direction:column;gap:10px">
   <b>📲 Get files from WhatsApp</b>
@@ -643,9 +655,9 @@ DB.getBlobLocal=DB.getBlob;DB.getBlob=async k=>{const b=await DB.getBlobLocal(k)
 function caseLabel(c){return (c.pt.name||'Unnamed case')+(c.pt.file?' · '+c.pt.file:'')}
 function renderCaseSel(){const s=$('#caseSel');s.innerHTML=cases.sort((a,b)=>(b.updated||b.created)-(a.updated||a.created)).map(c=>`<option value="${c.id}">${esc(caseLabel(c))}</option>`).join('');if(cur)s.value=cur.id}
 async function openCase(c){await saveNow();for(const u of urlCache.values())URL.revokeObjectURL(u);urlCache.clear();cur=c;
-  for(const k of['photos','fx','models','occ','w','arch'])cur[k]=cur[k]||{};cur.ceph=cur.ceph||{pts:{}};cur.ceph.pts=cur.ceph.pts||{};cur.ceph.auto=cur.ceph.auto||{};cur.ceph.cv=cur.ceph.cv||{};cur.ceph.vert=cur.ceph.vert||{};vertStep=-1;cur.ceph.meas=cur.ceph.meas||[];q3=null;measMode=null;measPts=[];simWarp=null;if(simOn){simSetUI();simLoadPhoto().then(()=>{simReport();cephView.draw()})}cur.opg=cur.opg||{teeth:{},f:{}};cur.plan=cur.plan||{};cur.plan.sel=cur.plan.sel||[];cur.plan.refs=cur.plan.refs||[];cur.pt.h=cur.pt.h||{};
+  for(const k of['photos','fx','models','occ','w','arch'])cur[k]=cur[k]||{};cur.ceph=cur.ceph||{pts:{}};cur.ceph.pts=cur.ceph.pts||{};cur.ceph.auto=cur.ceph.auto||{};cur.ceph.cv=cur.ceph.cv||{};cur.ceph.vert=cur.ceph.vert||{};vertStep=-1;cur.ceph.meas=cur.ceph.meas||[];q3=null;measMode=null;measPts=[];cephHist=[];simWarp=null;if(simOn){simSetUI();simLoadPhoto().then(()=>{simReport();cephView.draw()})}cur.opg=cur.opg||{teeth:{},f:{}};cur.plan=cur.plan||{};cur.plan.sel=cur.plan.sel||[];cur.plan.refs=cur.plan.refs||[];cur.pt.h=cur.pt.h||{};
   try{localStorage.setItem('oa-last',c.id)}catch(e){}
-  renderCaseSel();bindAll();renderPhotos();renderWidths();renderAnalysis();renderBrushes();renderChart();lmIdx=nextMissing(0);extView='before';fillPopSelect();renderAutoInfo();renderPlanner();renderPred();smImg=null;smAfter=null;smTap=null;smRender();renderLm();renderCephTable();renderLive(null);renderCvm();updDots();
+  renderCaseSel();bindAll();renderPhotos();renderWidths();renderAnalysis();renderBrushes();renderChart();lmIdx=nextMissing(0);extView='before';fillPopSelect();renderAutoInfo();renderPlanner();renderPred();fsImg=null;fsRender();smImg=null;smAfter=null;smTap=null;smRender();renderLm();renderCephTable();renderLive(null);renderCvm();updDots();
   cephView.setImage(null);opgView.setImage(null);mesh.clear();
   if(cur.ceph.img){blobURL(cur.ceph.img).then(u=>u&&loadImg(u)).then(i=>{if(i&&c===cur)cephView.setImage(i)}).catch(()=>{})}
   if(cur.opg.img){blobURL(cur.opg.img).then(u=>u&&loadImg(u)).then(i=>{if(i&&c===cur)opgView.setImage(i)}).catch(()=>{})}
@@ -797,7 +809,7 @@ let phSlot=null;
 $('#slots').onclick=e=>{const s=e.target.closest('.slot');if(!s)return;phSlot=s.dataset.slot;if(cur.photos[phSlot])openPv();else $('#phFile').click()};
 $('#slots').addEventListener('change',async e=>{if(e.target.id!=='phFile')return;const f=e.target.files[0];e.target.value='';if(f)await setPhoto(phSlot,f)});
 async function setPhoto(slot,f){try{const d=await decodeImage(f);await storePhoto(slot,d.blob)}catch(e){toast(f.name+': '+e.message)}}
-async function storePhoto(slot,blob){const old=cur.photos[slot];const k='b:'+uid();await DB.putBlob(k,blob);cur.photos[slot]=k;if(old)await DB.delBlob(old);saveNow();renderPhotos();updDots();if(slot==='es'){smImg=null;smAfter=null;smRender()}if(slot==='ep'){predImg=null;if(cur.fx.pred)cur.fx.pred.pts={};renderPred()}}
+async function storePhoto(slot,blob){const old=cur.photos[slot];const k='b:'+uid();await DB.putBlob(k,blob);cur.photos[slot]=k;if(old)await DB.delBlob(old);saveNow();renderPhotos();updDots();if(slot==='es'){smImg=null;smAfter=null;smRender()}if(slot==='es'||slot==='ef'){fsImg=null;fsRender()}if(slot==='ep'){predImg=null;if(cur.fx.pred)cur.fx.pred.pts={};renderPred()}}
 async function openPv(){$('#pvImg').src=await blobURL(cur.photos[phSlot]);$('#pvTitle').textContent=SLOTS.find(s=>s[0]===phSlot)[1];$('#pvDlg').showModal()}
 $('#pvClose').onclick=()=>$('#pvDlg').close();
 $('#pvGrid').onclick=e=>{const on=e.target.getAttribute('aria-pressed')!=='true';e.target.setAttribute('aria-pressed',on);$('#pvBox').classList.toggle('grid',on)};
@@ -1017,16 +1029,22 @@ $('#anForm').onsubmit=ev=>{const v=ev.submitter&&ev.submitter.value;if(v==='canc
 let lmIdx=0,calMode=false,calPts=[];
 function nextMissing(from){for(let i=0;i<LMS.length;i++){const j=(from+i)%LMS.length;if(!cur.ceph.pts[LMS[j][0]])return j}return Math.min(from,LMS.length-1)}
 function renderLm(){$('#lmList').innerHTML=LMS.map(([k,n,d],i)=>`<div class="lm ${i===lmIdx?'cur':''}" data-i="${i}"><b>${k}</b><span class="d"><span style="color:var(--ink)">${esc(n)}</span><br>${esc(d)}</span>${cur.ceph.auto&&cur.ceph.auto[k]?`<span class="au ${cur.ceph.auto[k]==='low'?'low':''}">${cur.ceph.auto[k]==='tpl'?'draft':'auto'}</span>`:''}${cur.ceph.pts[k]?`<span class="ok">${cur.ceph.auto&&cur.ceph.auto[k]?'?':'✓'}</span><button class="btn sm" data-clr="${k}" title="Remove">×</button>`:''}</div>`).join('');
-  const h=$('#cHint');if(cephView.img){h.hidden=false;$('#cOK').hidden=!Object.keys(cur.ceph.auto||{}).length;if(aiBusy)return;if(vertStep>=0){vertHint();return}if(measMode){measHint();return}h.textContent=q3?`Quick place: tap ${LMS.find(l=>l[0]===Q3[q3.length])[1]} (${q3.length+1} of 3)`:calMode?`Calibrate: tap ${calPts.length?'the second':'the first'} point on the ruler`:(LMS.every(l=>cur.ceph.pts[l[0]])?'All landmarks placed — drag any point to adjust it':`Tap to place ${LMS[lmIdx][1]} — ${LMS[lmIdx][2]}`)}else h.hidden=true}
-$('#lmList').onclick=e=>{const c=e.target.closest('[data-clr]');if(c){delete cur.ceph.pts[c.dataset.clr];delete cur.ceph.auto[c.dataset.clr];save();renderLm();renderCephTable();cephView.draw();return}const r=e.target.closest('.lm');if(r){lmIdx=+r.dataset.i;renderLm()}};
+  updUndo();const h=$('#cHint');if(cephView.img){h.hidden=false;$('#cOK').hidden=!Object.keys(cur.ceph.auto||{}).length;if(aiBusy)return;if(vertStep>=0){vertHint();return}if(measMode){measHint();return}h.textContent=q3?`Quick place: tap ${LMS.find(l=>l[0]===Q3[q3.length])[1]} (${q3.length+1} of 3)`:calMode?`Calibrate: tap ${calPts.length?'the second':'the first'} point on the ruler`:(LMS.every(l=>cur.ceph.pts[l[0]])?'All landmarks placed — drag any point to adjust it':`Tap to place ${LMS[lmIdx][1]} — ${LMS[lmIdx][2]}`)}else h.hidden=true}
+let cephHist=[];
+const cephState=()=>JSON.stringify({pts:cur.ceph.pts,auto:cur.ceph.auto||{}});
+function cephSnap(){const s=cephState();if(cephHist[cephHist.length-1]!==s)cephHist.push(s);if(cephHist.length>80)cephHist.shift();updUndo()}
+function updUndo(){const b=$('#cUndo');if(b)b.disabled=!cephHist.some(h=>h!==cephState());const a=$('#cClrAuto');if(a)a.hidden=!Object.values(cur.ceph.auto||{}).some(Boolean)}
+function cephUndo(){const now=cephState();while(cephHist.length&&cephHist[cephHist.length-1]===now)cephHist.pop();const h=cephHist.pop();if(!h){updUndo();return toast('Nothing to undo')}
+  const o=JSON.parse(h);cur.ceph.pts=o.pts;cur.ceph.auto=o.auto;save();lmIdx=nextMissing(0);renderLm();renderCephTable();renderLive(null);cephView.draw();updUndo()}
+$('#lmList').onclick=e=>{const c=e.target.closest('[data-clr]');if(c){cephSnap();delete cur.ceph.pts[c.dataset.clr];delete cur.ceph.auto[c.dataset.clr];save();renderLm();renderCephTable();cephView.draw();return}const r=e.target.closest('.lm');if(r){lmIdx=+r.dataset.i;renderLm()}};
 const LINES=[['S','N'],['N','A'],['N','B'],['Po','Or'],['Go','Me'],['ANS','PNS'],['U1A','U1T'],['L1A','L1T'],['Prn','PogS'],['N','Pog'],['S','Gn']];
 const cephView=new ImgView($('#cStage'),$('#cCv'),{empty:$('#cEmpty'),
-  hit:(q,tol)=>{if(simOn&&simAfter){const h=simHit(q,tol);if(h)return h}let best=null,bd=tol;const VT=cur.ceph.vert||{};for(const V in VT)for(const k in VT[V]){const dd=len(sub(VT[V][k],q));if(dd<bd){bd=dd;best='#v'+V+'_'+k}}(cur.ceph.meas||[]).forEach((m,i)=>m.p.forEach((pt,j)=>{const d=len(sub(pt,q));if(d<bd){bd=d;best='#m'+i+'_'+j}}));for(const k in cur.ceph.pts){const d=len(sub(cur.ceph.pts[k],q));if(d<bd){bd=d;best=k}}return best},
+  hit:(q,tol)=>{if(simOn&&simAfter){const h=simHit(q,tol);if(h)return h}let best=null,bd=tol;const VT=cur.ceph.vert||{};for(const V in VT)for(const k in VT[V]){const dd=len(sub(VT[V][k],q));if(dd<bd){bd=dd;best='#v'+V+'_'+k}}(cur.ceph.meas||[]).forEach((m,i)=>m.p.forEach((pt,j)=>{const d=len(sub(pt,q));if(d<bd){bd=d;best='#m'+i+'_'+j}}));for(const k in cur.ceph.pts){const d=len(sub(cur.ceph.pts[k],q));if(d<bd){bd=d;best=k}}if(best&&!best.startsWith('#'))cephSnap();return best},
   onDrag:(k,q)=>{if(k.startsWith('#s')||k.startsWith('#t')){simDrag(k,q);simReport();return}if(k.startsWith('#v')){const[V,kk]=k.slice(2).split('_');cur.ceph.vert[V][kk]=q.map(r1);return}if(k.startsWith('#m')){const[i,j]=k.slice(2).split('_').map(Number);cur.ceph.meas[i].p[j]=q.map(r1);liveSoon(null);return}cur.ceph.pts[k]=q.map(r1);if(cur.ceph.auto[k]){delete cur.ceph.auto[k];renderLm()}liveSoon(k)},onDrop:k=>{if(k&&(k.startsWith('#s')||k.startsWith('#t'))){save();simReport();return}if(k&&k.startsWith('#v')&&vertStep<0)vertApply();save();renderCephTable();renderLive(null)},
   onTap:q=>{if(vertStep>=0){vertTap(q);return}if(measMode){measTap(q);return}if(q3){q3Tap(q);return}if(calMode){calPts.push(q);if(calPts.length===2){const px=len(sub(calPts[0],calPts[1]));const mm=parseFloat(prompt('Distance between the two points in mm:','10'));
       if(mm>0&&px>0){cur.ceph.mmpp=+(mm/px).toFixed(5);$('[data-k="ceph.mmpp"]').value=cur.ceph.mmpp;save();toast('Calibrated: '+cur.ceph.mmpp+' mm per pixel')}calMode=false;calPts=[];$('#cCal').setAttribute('aria-pressed',false);renderCephTable()}
       renderLm();cephView.draw();return}
-    cur.ceph.pts[LMS[lmIdx][0]]=q.map(r1);delete cur.ceph.auto[LMS[lmIdx][0]];save();lmIdx=nextMissing(lmIdx+1);renderLm();renderCephTable();cephView.draw()},
+    cephSnap();cur.ceph.pts[LMS[lmIdx][0]]=q.map(r1);delete cur.ceph.auto[LMS[lmIdx][0]];save();lmIdx=nextMissing(lmIdx+1);renderLm();renderCephTable();cephView.draw()},
   overlay:(c,v)=>{const P=cur.ceph.pts,d=v.dpr;drawSimPhoto(c,v);if(v.grid)drawGrid(c,v);if(simOn&&simAfter){if(simShowB)drawOutlines(c,v,P,true);if(v.outline!==false)drawOutlines(c,v,simPts())}else if(v.outline!==false)drawOutlines(c,v);drawVert(c,v);c.lineWidth=1.5*d;
     if(cephView.trace!==false){c.strokeStyle='#38bdf8cc';for(const[a,b]of LINES)if(P[a]&&P[b]){const A=v.toScr(P[a]),B=v.toScr(P[b]);c.beginPath();c.moveTo(A[0],A[1]);c.lineTo(B[0],B[1]);c.stroke()}
       if(P.U1T&&P.L1T&&P.Mo){c.strokeStyle='#a78bfacc';const A=v.toScr(P.Mo),B=v.toScr(mid(P.U1T,P.L1T));c.beginPath();c.moveTo(A[0],A[1]);c.lineTo(B[0],B[1]);c.stroke()}}
@@ -1061,6 +1079,13 @@ $('#predCv').onclick=e=>{if(!predImg)return;const r=e.target.getBoundingClientRe
   pts[need[0]]=[(e.clientX-r.left)*predImg.width/r.width,(e.clientY-r.top)*predImg.height/r.height].map(r1);if(!num(cur.fx.predScale)){cur.fx.predScale=defaultScale();$('#predScale').value=cur.fx.predScale}saveNow();renderPred()};
 $('#predSplit').oninput=()=>renderPred();
 $('#smFind').onclick=smFind;
+$('#fsFind').onclick=fsFind;$('#fsSlot').onchange=e=>{const st=fsState();st.slot=e.target.value;st.chosen=true;fsImg=null;save();fsRender()};$('#fsIpd').onchange=e=>{const v=+e.target.value;if(v>40&&v<80){fsState().ipd=v;save()}fsRender()};
+$('#fsReset').onclick=()=>{fsState().pts={};save();fsRender()};
+$('#fsCv').addEventListener('pointerdown',e=>{if(!fsImg)return;const q=fsPt(e),s=fsState(),cv=$('#fsCv'),tol=16*fsImg.im.width/cv.getBoundingClientRect().width;let best=null,bd=tol;
+  for(const k in s.pts){const d=len(sub(s.pts[k],q));if(d<bd){bd=d;best=k}}if(best){fsDrag=best;cv.setPointerCapture(e.pointerId);return}
+  const need=FS_PTS.find(([k])=>!s.pts[k]);if(need){s.pts[need[0]]=q.map(r1);save();fsRender()}});
+$('#fsCv').addEventListener('pointermove',e=>{if(!fsDrag)return;fsState().pts[fsDrag]=fsPt(e).map(r1);fsRender(true)});
+$('#fsCv').addEventListener('pointerup',()=>{if(!fsDrag)return;fsDrag=null;save();fsRender()});
 $('#smHand').onclick=async()=>{if(!(await smLoad()))return toast('Add the "Face – frontal smile" photo first');smTap=[];$('#smDone').hidden=false;smRender()};
 $('#smDone').onclick=()=>{if(!smTap||smTap.length<6)return toast('Tap at least 6 points round the lips');const s=smState();s.poly=smTap;for(const k of['edge','gum','dmid'])delete s[k];smTap=null;$('#smDone').hidden=true;smAfter=null;save();smRender()};
 $('#smShow').onclick=e=>{smShow=!smShow;e.target.setAttribute('aria-pressed',smShow);smRender()};
@@ -1140,7 +1165,7 @@ function affine3(src,dst){// solve x' = a x + b y + c, y' = d x + e y + f from t
 $('#cQ3').onclick=e=>{if(!cephView.img)return toast('Upload the ceph first');if(measMode)setMeasMode(measMode);if(q3){q3=null}else{if(Object.keys(cur.ceph.pts).length&&!confirm('Quick place replaces the landmarks already placed. Continue?'))return;q3=[]}
   calMode=false;$('#cCal').setAttribute('aria-pressed',false);e.target.setAttribute('aria-pressed',!!q3);renderLm();cephView.draw()};
 function q3Tap(q){q3.push(q);if(q3.length<3){renderLm();cephView.draw();return}
-  const f=affine3(Q3.map(k=>TPL[k]),q3);q3=null;$('#cQ3').setAttribute('aria-pressed',false);if(!f){toast('Those three points are in a line — try again');renderLm();return}
+  const f=affine3(Q3.map(k=>TPL[k]),q3);q3=null;if(f)cephSnap();$('#cQ3').setAttribute('aria-pressed',false);if(!f){toast('Those three points are in a line — try again');renderLm();return}
   cur.ceph.pts={};cur.ceph.auto={};for(const k in TPL){cur.ceph.pts[k]=f(TPL[k]).map(r1);cur.ceph.auto[k]=Q3.includes(k)?undefined:'tpl'}for(const k of Q3)delete cur.ceph.auto[k];
   saveNow();lmIdx=nextMissing(0);renderLm();renderCephTable();cephView.draw();toast('All points placed from an average skull — drag each one onto the real anatomy')}
 // Claude AI, called straight from this browser with the user's own key (kept only on this device)
@@ -1179,12 +1204,16 @@ $('#cAI').onclick=async()=>{if(aiBusy)return;const img=cephView.img;if(!img)retu
   aiBusy=true;const btn=$('#cAI'),h=$('#cHint');btn.disabled=true;btn.textContent='✨ Detecting…';h.hidden=false;h.textContent='Claude AI is finding the landmarks — this takes about a minute…';const forCase=cur;
   try{const j=await cephJPEG(img),res=await claudeCeph(j);
     if(forCase!==cur)return;const pts={},auto={};for(const p of res.landmarks||[]){if(!LMS.some(l=>l[0]===p.key))continue;pts[p.key]=[r1(p.x/j.sc),r1(p.y/j.sc)];auto[p.key]=p.confidence||'medium'}
-    if(!Object.keys(pts).length)throw new Error('no landmarks were found');cur.ceph.pts=pts;cur.ceph.auto=auto;saveNow();lmIdx=nextMissing(0);renderLm();renderCephTable();cephView.draw();
+    if(!Object.keys(pts).length)throw new Error('no landmarks were found');cephSnap();cur.ceph.pts=pts;cur.ceph.auto=auto;saveNow();lmIdx=nextMissing(0);renderLm();renderCephTable();cephView.draw();
     const low=Object.values(auto).filter(c=>c==='low').length;
     toast(`${Object.keys(pts).length} landmarks found${low?`, ${low} uncertain (orange)`:''} — check each one and drag any that are off`+(res.is_lateral_ceph===false?'. Warning: this may not be a lateral ceph.':'')+(res.note?' Note: '+res.note:''))}
   catch(e){toast('Auto-detect failed: '+(e.message==='Failed to fetch'?'could not reach Claude AI — check the internet connection':e.message))}
   finally{aiBusy=false;btn.disabled=false;btn.textContent='✨ Auto-detect';renderLm()}};
-$('#cOK').onclick=()=>{cur.ceph.auto={};saveNow();renderLm();cephView.draw();toast('All landmarks accepted')};
+$('#cUndo').onclick=cephUndo;
+$('#cClrAuto').onclick=()=>{const ks=Object.keys(cur.ceph.auto||{}).filter(k=>cur.ceph.auto[k]);if(!ks.length)return;cephSnap();for(const k of ks){delete cur.ceph.pts[k];delete cur.ceph.auto[k]}
+  save();lmIdx=nextMissing(0);renderLm();renderCephTable();renderLive(null);cephView.draw();toast(ks.length+' auto-detected landmark'+(ks.length>1?'s':'')+' removed — ↶ Undo brings them back')};
+addEventListener('keydown',e=>{if(curTab!=='ceph'||!(e.ctrlKey||e.metaKey)||e.key.toLowerCase()!=='z'||e.shiftKey||/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))return;e.preventDefault();cephUndo()});
+$('#cOK').onclick=()=>{cephSnap();cur.ceph.auto={};saveNow();renderLm();cephView.draw();toast('All landmarks accepted')};
 
 /* ---------- OPG + tooth chart ---------- */
 const opgView=new ImgView($('#oStage'),$('#oCv'),{empty:$('#oEmpty')});imgControls(opgView,'o');
@@ -1274,16 +1303,33 @@ const mesh=new MeshView($('#mStage'),$('#mGL'),$('#mOv'));
 /* ---------- picture editor: crop, rotate, straighten, flip ---------- */
 let ED=null;
 async function openEditor(blob,title,onSave){const u=URL.createObjectURL(blob);let img;try{img=await loadImg(u)}catch(e){URL.revokeObjectURL(u);return toast('Could not open the picture')}
-  ED={img,u,rot:0,fine:0,flip:false,aspect:0,onSave,crop:null,drag:null};$('#edTitle').textContent='Edit — '+title;$('#edFine').value=0;$('#edFineV').textContent='0°';$('#edAspect').value='0';$('#edDlg').showModal();setTimeout(()=>{edFull();edDraw()},30)}
-function edGeom(){const{img,rot,fine}=ED,th=(rot*90+fine)*Math.PI/180,c=Math.abs(Math.cos(th)),s=Math.abs(Math.sin(th));return{th,W:img.width*c+img.height*s,H:img.width*s+img.height*c}}
-function edFull(){const g=edGeom(),{img}=ED,odd=ED.rot%2!==0,bw=odd?img.height:img.width,bh=odd?img.width:img.height;
+  ED={img,u,rot:0,fine:0,pitch:0,yaw:0,wp:null,sw:img.width,sh:img.height,flip:false,aspect:0,onSave,crop:null,drag:null};$('#edTitle').textContent='Edit — '+title;for(const k of['Fine','Pitch','Yaw']){$('#ed'+k).value=0;$('#ed'+k+'V').textContent='0°'}$('#edAspect').value='0';$('#edDlg').showModal();setTimeout(()=>{edFull();edDraw()},30)}
+function edGeom(){const{sw,sh,rot,fine}=ED,th=(rot*90+fine)*Math.PI/180,c=Math.abs(Math.cos(th)),s=Math.abs(Math.sin(th));return{th,W:sw*c+sh*s,H:sw*s+sh*c}}
+function edFull(){const g=edGeom(),odd=ED.rot%2!==0,bw=odd?ED.sh:ED.sw,bh=odd?ED.sw:ED.sh;
   if(ED.fine===0){ED.crop={x:0,y:0,w:g.W,h:g.H};return edAspectFit()}
   const f=Math.abs(ED.fine)*Math.PI/180,inside=k=>{const hw=k*bw/2,hh=k*bh/2;return[[hw,hh],[hw,-hh],[-hw,hh],[-hw,-hh]].every(([x,y])=>{const xr=x*Math.cos(f)+y*Math.sin(f),yr=-x*Math.sin(f)+y*Math.cos(f);return Math.abs(xr)<=bw/2+1e-6&&Math.abs(yr)<=bh/2+1e-6})};
   let lo=0,hi=1;for(let i=0;i<30;i++){const m=(lo+hi)/2;inside(m)?lo=m:hi=m}// largest straight crop that has no empty corners
   ED.crop={x:(g.W-lo*bw)/2,y:(g.H-lo*bh)/2,w:lo*bw,h:lo*bh};edAspectFit()}
 function edAspectFit(){const a=ED.aspect;if(!a)return;const c=ED.crop,cx=c.x+c.w/2,cy=c.y+c.h/2;let w=c.w,h=c.h;if(w/h>a)w=h*a;else h=w/a;ED.crop={x:cx-w/2,y:cy-h/2,w,h}}
 function edView(){const cv=$('#edCv'),r=cv.getBoundingClientRect(),d=window.devicePixelRatio||1;cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d);const g=edGeom(),s=Math.min(cv.width/g.W,cv.height/g.H)*0.94;return{cv,d,g,s,ox:(cv.width-g.W*s)/2,oy:(cv.height-g.H*s)/2}}
-function edPaint(x,g,{img,flip}){x.translate(g.W/2,g.H/2);x.rotate(g.th);x.scale(flip?-1:1,1);x.drawImage(img,-img.width/2,-img.height/2)}
+function edPaint(x,g,{img,flip,sw,sh,wp},full){x.translate(g.W/2,g.H/2);x.rotate(g.th);x.scale(flip?-1:1,1);x.drawImage(full||(wp?wp.cv:img),-sw/2,-sh/2,sw,sh)}
+/* pitch / yaw: the photo plane is turned in 3-D and projected again (camera at about one picture-diagonal), then trimmed to the largest upright rectangle inside */
+function hom4(a,b){const M=[],v=[];for(let i=0;i<4;i++){const[x,y]=a[i],[u,w]=b[i];M.push([x,y,1,0,0,0,-u*x,-u*y]);v.push(u);M.push([0,0,0,x,y,1,-w*x,-w*y]);v.push(w)}
+  for(let c=0;c<8;c++){let p=c;for(let r=c+1;r<8;r++)if(Math.abs(M[r][c])>Math.abs(M[p][c]))p=r;[M[c],M[p]]=[M[p],M[c]];[v[c],v[p]]=[v[p],v[c]];for(let r=0;r<8;r++)if(r!==c){const f=M[r][c]/M[c][c];for(let k=c;k<8;k++)M[r][k]-=f*M[c][k];v[r]-=f*v[c]}}
+  const h=v.map((x,i)=>x/M[i][i]);return[h[0],h[1],h[2],h[3],h[4],h[5],h[6],h[7],1]}
+const homApply=(H,[x,y])=>{const d=H[6]*x+H[7]*y+H[8];return[(H[0]*x+H[1]*y+H[2])/d,(H[3]*x+H[4]*y+H[5])/d]};
+function edPersp(){const{img,pitch,yaw}=ED,w=img.width,h=img.height,f=Math.hypot(w,h),a=pitch*Math.PI/180,b=yaw*Math.PI/180,src=[[0,0],[w,0],[w,h],[0,h]];
+  const dst=src.map(([x,y])=>{let X=x-w/2,Y=y-h/2,Z=0;const Y1=Y*Math.cos(a)-Z*Math.sin(a),Z1=Y*Math.sin(a)+Z*Math.cos(a);const X2=X*Math.cos(b)+Z1*Math.sin(b),Z2=-X*Math.sin(b)+Z1*Math.cos(b);return[f*X2/(f+Z2),f*Y1/(f+Z2)]});
+  const x0=Math.max(dst[0][0],dst[3][0]),x1=Math.min(dst[1][0],dst[2][0]),y0=Math.max(dst[0][1],dst[1][1]),y1=Math.min(dst[2][1],dst[3][1]);
+  const H=hom4(src,dst.map(([x,y])=>[x-x0,y-y0]));return{H,Hi:hom4(dst.map(([x,y])=>[x-x0,y-y0]),src),W:x1-x0,Hh:y1-y0}}
+function edWarpCanvas(P,k){const{img}=ED,sk=Math.min(1,k*1.0),sc=document.createElement('canvas');sc.width=Math.max(1,Math.round(img.width*sk));sc.height=Math.max(1,Math.round(img.height*sk));const sx=sc.getContext('2d');sx.drawImage(img,0,0,sc.width,sc.height);
+  const S=sx.getImageData(0,0,sc.width,sc.height).data,SW=sc.width,SH=sc.height,ow=Math.max(1,Math.round(P.W*k)),oh=Math.max(1,Math.round(P.Hh*k)),oc=document.createElement('canvas');oc.width=ow;oc.height=oh;
+  const ox=oc.getContext('2d'),out=ox.createImageData(ow,oh),O=out.data,Hi=P.Hi;
+  for(let v=0;v<oh;v++)for(let u=0;u<ow;u++){const X=(u+0.5)/k,Y=(v+0.5)/k,d=Hi[6]*X+Hi[7]*Y+Hi[8],fx=(Hi[0]*X+Hi[1]*Y+Hi[2])/d*sk-0.5,fy=(Hi[3]*X+Hi[4]*Y+Hi[5])/d*sk-0.5;
+    const ix=Math.floor(fx),iy=Math.floor(fy);if(ix<0||iy<0||ix>=SW-1||iy>=SH-1)continue;const tx=fx-ix,ty=fy-iy,a=(iy*SW+ix)*4,o=(v*ow+u)*4;
+    for(let c=0;c<4;c++)O[o+c]=(S[a+c]*(1-tx)+S[a+4+c]*tx)*(1-ty)+(S[a+SW*4+c]*(1-tx)+S[a+SW*4+4+c]*tx)*ty}
+  ox.putImageData(out,0,0);return oc}
+function edSetPersp(){if(!ED.pitch&&!ED.yaw){ED.wp=null;ED.sw=ED.img.width;ED.sh=ED.img.height;return}const P=edPersp();ED.wp={P,cv:edWarpCanvas(P,Math.min(1,900/Math.max(P.W,P.Hh)))};ED.sw=P.W;ED.sh=P.Hh}
 function edDraw(){if(!ED)return;const V=edView(),x=V.cv.getContext('2d'),c=ED.crop;x.setTransform(1,0,0,1,0,0);x.fillStyle='#0b0f14';x.fillRect(0,0,V.cv.width,V.cv.height);
   x.setTransform(V.s,0,0,V.s,V.ox,V.oy);edPaint(x,V.g,ED);x.setTransform(1,0,0,1,0,0);const R=[V.ox+c.x*V.s,V.oy+c.y*V.s,c.w*V.s,c.h*V.s];
   x.fillStyle='#000a';x.beginPath();x.rect(0,0,V.cv.width,V.cv.height);x.rect(R[0],R[1],R[2],R[3]);x.fill('evenodd');x.strokeStyle='#fff';x.lineWidth=2*V.d;x.strokeRect(...R);
@@ -1300,12 +1346,13 @@ $('#edCv').addEventListener('pointermove',e=>{if(!ED||!ED.drag)return;const p=ed
     if(w<20||h<20)return;ED.crop={x:bx<ax?ax-w:ax,y:by<ay?ay-h:ay,w,h}}edDraw()});
 $('#edCv').addEventListener('pointerup',()=>{if(ED)ED.drag=null});
 $('#edL').onclick=()=>{ED.rot=(ED.rot+3)%4;edFull();edDraw()};$('#edR').onclick=()=>{ED.rot=(ED.rot+1)%4;edFull();edDraw()};$('#edFlip').onclick=()=>{ED.flip=!ED.flip;edDraw()};
-$('#edFine').oninput=e=>{ED.fine=+e.target.value;$('#edFineV').textContent=ED.fine+'°';edFull();edDraw()};$('#edAspect').onchange=e=>{ED.aspect=+e.target.value;edFull();edDraw()};
-$('#edReset').onclick=()=>{Object.assign(ED,{rot:0,fine:0,flip:false,aspect:0});$('#edFine').value=0;$('#edFineV').textContent='0°';$('#edAspect').value='0';edFull();edDraw()};
+$('#edFine').oninput=e=>{ED.fine=+e.target.value;$('#edFineV').textContent=ED.fine+'°';edFull();edDraw()};
+for(const k of['Pitch','Yaw'])$('#ed'+k).oninput=e=>{ED[k.toLowerCase()]=+e.target.value;$('#ed'+k+'V').textContent=e.target.value+'°';edSetPersp();edFull();edDraw()};$('#edAspect').onchange=e=>{ED.aspect=+e.target.value;edFull();edDraw()};
+$('#edReset').onclick=()=>{Object.assign(ED,{rot:0,fine:0,pitch:0,yaw:0,flip:false,aspect:0});edSetPersp();for(const k of['Fine','Pitch','Yaw']){$('#ed'+k).value=0;$('#ed'+k+'V').textContent='0°'}$('#edAspect').value='0';edFull();edDraw()};
 $('#edCancel').onclick=()=>{$('#edDlg').close()};$('#edDlg').addEventListener('close',()=>{if(ED){URL.revokeObjectURL(ED.u);ED=null}});
 $('#edSave').onclick=async()=>{const g=edGeom(),c=ED.crop,{img,flip}=ED,out=document.createElement('canvas'),k=Math.min(1,6000/Math.max(c.w,c.h));out.width=Math.round(c.w*k);out.height=Math.round(c.h*k);
-  const x=out.getContext('2d');x.setTransform(k,0,0,k,-c.x*k,-c.y*k);edPaint(x,g,ED);
-  const map=([px,py])=>{let X=(px-img.width/2)*(flip?-1:1),Y=py-img.height/2;const cs=Math.cos(g.th),sn=Math.sin(g.th);return[r1((X*cs-Y*sn+g.W/2-c.x)*k),r1((X*sn+Y*cs+g.H/2-c.y)*k)]};
+  const x=out.getContext('2d'),wp=ED.wp,full=wp?edWarpCanvas(wp.P,Math.min(1,k*1.05,5000/Math.max(wp.P.W,wp.P.Hh))):null;x.setTransform(k,0,0,k,-c.x*k,-c.y*k);edPaint(x,g,ED,full);
+  const sw=ED.sw,sh=ED.sh,map=([px0,py0])=>{const[px,py]=wp?homApply(wp.P.H,[px0,py0]):[px0,py0];let X=(px-sw/2)*(flip?-1:1),Y=py-sh/2;const cs=Math.cos(g.th),sn=Math.sin(g.th);return[r1((X*cs-Y*sn+g.W/2-c.x)*k),r1((X*sn+Y*cs+g.H/2-c.y)*k)]};
   const b=await canvasBlob(out,'image/jpeg',0.93),cb=ED.onSave;$('#edDlg').close();await cb(b,map,k)};
 function mapCephData(map,k){const C=cur.ceph;for(const kk in C.pts)C.pts[kk]=map(C.pts[kk]);for(const m of C.meas||[])m.p=m.p.map(map);for(const V in C.vert||{})for(const kk in C.vert[V])C.vert[V][kk]=map(C.vert[V][kk]);if(k!==1&&num(C.mmpp))C.mmpp=+(C.mmpp/k).toFixed(5)}
 async function editXray(which){const k=cur[which].img;if(!k)return toast('Upload the '+(which==='ceph'?'ceph':'OPG')+' first');const b=await DB.getBlob(k);
@@ -1675,6 +1722,63 @@ async function smRender(){const info=$('#smInfo'),cv=$('#smCv');if(!cur||!info)r
   x.font='bold 15px sans-serif';x.lineWidth=3;x.strokeStyle='#000';x.fillStyle='#fff';x.strokeText('Original',10,24);x.fillText('Original',10,24);x.strokeText('Simulated',W-90,24);x.fillText('Simulated',W-90,24);
   const mm=smAfter;info.innerHTML=`Drag across the photo to compare. Incisal edges evened by up to ${Math.round(mm.maxDy)} px onto a smile arc that follows the lower lip${s.centre&&Math.abs(mm.dx)>=1?`, dental midline moved ${Math.round(Math.abs(mm.dx))} px to the facial midline`:''}${s.gaps?', small gaps closed':''}${s.white?', teeth whitened':''}. A picture to discuss the goal — not a promise of the result.`}
 function smPt(e){const r=$('#smCv').getBoundingClientRect();return[(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height]}
+
+/* ---------- facial symmetry (frontal photo) ----------
+   Reference: the interpupillary line; facial midline = perpendicular to it through soft-tissue nasion.
+   Thresholds: chin (menton) deviation of about 4 mm and a lip / occlusal cant of about 3–4° are noticed by most people. */
+const FS_PTS=[['PuR',"Pupil — patient's right (image left)"],['PuL',"Pupil — patient's left"],['ExR',"Outer eye corner — right"],['ExL',"Outer eye corner — left"],['N','Soft-tissue nasion (between the eyes)'],
+  ['Prn','Nose tip'],['AlR','Nose wing — right (widest point)'],['AlL','Nose wing — left'],['Sn','Subnasale (under the nose, midline)'],['Ls','Upper lip midpoint (philtrum)'],
+  ['ChR','Mouth corner — right'],['ChL','Mouth corner — left'],['Me','Chin — lowest midline point'],['GoR','Jaw angle — right'],['GoL','Jaw angle — left']];
+let fsImg=null,fsDrag=null;
+function fsState(){const s=cur.fx.symm=cur.fx.symm||{};if(!s.chosen||!s.slot)s.slot=cur.photos.ef?'ef':'es';s.pts=s.pts||{};if(s.key!==cur.photos[s.slot]){s.pts={};s.key=cur.photos[s.slot]}if(!(s.ipd>0))s.ipd=63;return s}
+async function fsLoad(){const s=fsState(),k=cur.photos[s.slot];if(!k){fsImg=null;return false}if(fsImg&&fsImg.key===k)return true;try{const im=await loadImg(await blobURL(k));fsImg={key:k,im};return true}catch(e){fsImg=null;return false}}
+function fsCalc(){const s=fsState(),P=s.pts;const L=P.PuR&&P.PuL?[P.PuR,P.PuL]:P.ExR&&P.ExL?[P.ExR,P.ExL]:null;if(!L)return null;
+  const ex=nrm(sub(L[1],L[0])),ey=[-ex[1],ex[0]],o=P.N||mid(L[0],L[1]),px=P.PuR&&P.PuL?len(sub(P.PuL,P.PuR))/s.ipd:len(sub(P.ExL,P.ExR))/(s.ipd*1.45);// px per mm
+  const X=p=>dot(sub(p,o),ex)/px,Y=p=>dot(sub(p,o),ey)/px,cant=(a,b)=>P[a]&&P[b]?Math.atan2(-dot(sub(P[b],P[a]),ey),dot(sub(P[b],P[a]),ex))*DEG:null;// + = patient's left side higher
+  const dev={};for(const k of['Prn','Sn','Ls','Me'])if(P[k])dev[k]=X(P[k]);
+  const pair={};for(const[k,n]of[['Ex','Outer eye corners'],['Al','Nose wings'],['Ch','Mouth corners'],['Go','Jaw angles']])if(P[k+'R']&&P[k+'L']){const r=-X(P[k+'R']),l=X(P[k+'L']);pair[k]={n,r,l,d:l-r,pc:100*Math.abs(l-r)/((r+l)/2||1),dv:Y(P[k+'L'])-Y(P[k+'R'])}}
+  const cants={Ch:cant('ChR','ChL'),Al:cant('AlR','AlL'),Go:cant('GoR','GoL')};
+  const chin=dev.Me,lc=cants.Ch;let grade='Symmetrical';const why=[];
+  if(chin!=null&&Math.abs(chin)>4){grade='Marked asymmetry';why.push(`chin ${r1(Math.abs(chin))} mm to the ${chin>0?'left':'right'}`)}else if(chin!=null&&Math.abs(chin)>=2){grade='Mild asymmetry';why.push(`chin ${r1(Math.abs(chin))} mm to the ${chin>0?'left':'right'}`)}
+  if(lc!=null&&Math.abs(lc)>4){grade='Marked asymmetry';why.push(`lip cant ${r1(Math.abs(lc))}°`)}else if(lc!=null&&Math.abs(lc)>=2){if(grade==='Symmetrical')grade='Mild asymmetry';why.push(`lip cant ${r1(Math.abs(lc))}°`)}
+  return{ex,ey,o,px,dev,pair,cants,grade,why}}
+async function fsRender(light){const info=$('#fsInfo'),cv=$('#fsCv');if(!cur||!info)return;const s=fsState();$('#fsSlot').value=s.slot;$('#fsIpd').value=s.ipd;
+  if(!(await fsLoad())){info.innerHTML='Add the <b>Face – frontal at rest</b> (or smile) photo above.';cv.width=cv.height=0;$('#fsOut').innerHTML='';$('#fsMirror').innerHTML='';return}
+  const im=fsImg.im,W=Math.min(1000,im.width),sc=W/im.width,H=Math.round(im.height*sc);cv.width=W;cv.height=H;const x=cv.getContext('2d');x.drawImage(im,0,0,W,H);const P=s.pts,S=p=>[p[0]*sc,p[1]*sc];
+  const need=FS_PTS.find(([k])=>!P[k]),R=fsCalc();
+  if(R){const big=Math.hypot(W,H),o=S(R.o),line=(p,d,col,dash)=>{x.strokeStyle=col;x.lineWidth=2;x.setLineDash(dash||[]);x.beginPath();x.moveTo(p[0]-d[0]*big,p[1]-d[1]*big);x.lineTo(p[0]+d[0]*big,p[1]+d[1]*big);x.stroke();x.setLineDash([])};
+    line(o,R.ey,'#22c55e');line(o,R.ex,'#facc15',[6,5]);for(const k of['Ch','Al','Go'])if(P[k+'R']&&P[k+'L']){x.strokeStyle='#f472b6';x.lineWidth=2;x.beginPath();x.moveTo(...S(P[k+'R']));x.lineTo(...S(P[k+'L']));x.stroke()}
+    if(P.Me){const m=S(P.Me),f=[o[0]+R.ey[0]*dot(sub(m,o),R.ey),o[1]+R.ey[1]*dot(sub(m,o),R.ey)];x.strokeStyle='#ef4444';x.lineWidth=3;x.beginPath();x.moveTo(...f);x.lineTo(...m);x.stroke()}}
+  x.font='bold 12px sans-serif';for(const[k]of FS_PTS)if(P[k]){const[a,b]=S(P[k]);x.fillStyle='#22d3ee';x.beginPath();x.arc(a,b,4,0,7);x.fill();x.strokeStyle='#000';x.lineWidth=3;x.strokeText(k,a+6,b-6);x.fillStyle='#fff';x.fillText(k,a+6,b-6)}
+  info.innerHTML=need?`<b>Tap: ${esc(need[1])}</b> (${FS_PTS.filter(([k])=>P[k]).length+1} of ${FS_PTS.length}) — or press ✨ Find the points. Drag any point to adjust it.`:'All points placed — drag any point to adjust it. Green = facial midline (perpendicular to the pupils through nasion), yellow = interpupillary line.';
+  if(!R){$('#fsOut').innerHTML='';$('#fsMirror').innerHTML='';return}
+  const side=v=>Math.abs(v)<0.5?'on the midline':`${r1(Math.abs(v))} mm to the patient's ${v>0?'left':'right'}`,cn=v=>v==null?'—':Math.abs(v)<0.5?'level':`${r1(Math.abs(v))}° (${v>0?'left':'right'} side higher)`;
+  const nm={Prn:'Nose tip',Sn:'Subnasale',Ls:'Upper lip / philtrum',Me:'Chin (menton)'},flag=(v,a,b)=>v==null?'':Math.abs(v)>b?'t-bad':Math.abs(v)>=a?'t-warn':'t-ok';
+  $('#fsOut').innerHTML=`<div style="margin-bottom:6px"><b>${esc(R.grade)}</b>${R.why.length?' — '+esc(R.why.join(', ')):''} <button class="btn sm" id="fsUse">Use in assessment</button></div>
+    <table><tr><th>Midline</th><th>Position</th></tr>${Object.entries(R.dev).map(([k,v])=>`<tr><td>${nm[k]}</td><td><span class="tag ${k==='Me'?flag(v,2,4):flag(v,1.5,3)}">${side(v)}</span></td></tr>`).join('')}</table>
+    <table style="margin-top:6px"><tr><th>Cant (vs pupils)</th><th></th></tr>${[['Ch','Lip line (mouth corners) — occlusal cant'],['Al','Nose wings'],['Go','Jaw angles']].map(([k,n])=>R.cants[k]==null?'':`<tr><td>${n}</td><td><span class="tag ${flag(R.cants[k],2,4)}">${cn(R.cants[k])}</span></td></tr>`).join('')}</table>
+    <table style="margin-top:6px"><tr><th>Distance from midline</th><th>Right</th><th>Left</th><th>Difference</th></tr>${Object.values(R.pair).map(q=>`<tr><td>${q.n}</td><td>${r1(q.r)} mm</td><td>${r1(q.l)} mm</td><td><span class="tag ${q.pc>8?'t-bad':q.pc>4?'t-warn':'t-ok'}">${r1(Math.abs(q.d))} mm (${r1(q.pc)}%)</span></td></tr>`).join('')}</table>
+    <div class="note">mm from an interpupillary distance of ${s.ipd} mm. Chin deviation ≥ 4 mm and a lip cant ≥ 3–4° are noticed by most people; small differences are normal — no face is perfectly symmetrical. Confirm with a PA ceph or CBCT before planning surgery.</div>`;
+  $('#fsUse').onclick=()=>{cur.fx.sym=R.grade;const el=$('[data-k="fx.sym"]');if(el)el.value=R.grade;save();toast('Facial symmetry set to: '+R.grade)};
+  if(light)return;
+  // mirror faces: each half joined to its own mirror image about the midline
+  const M=$('#fsMirror');M.innerHTML='';const th=Math.atan2(R.ex[1],R.ex[0]),o=R.o,rc=document.createElement('canvas');rc.width=im.width;rc.height=im.height;const rx=rc.getContext('2d');rx.translate(o[0],o[1]);rx.rotate(-th);rx.translate(-o[0],-o[1]);rx.drawImage(im,0,0);
+  for(const[lab,left]of[["Right + right (patient's right side mirrored)",true],["Left + left (patient's left side mirrored)",false]]){const half=left?o[0]:im.width-o[0];if(half<10)continue;const c=document.createElement('canvas'),k=Math.min(1,320/(2*half));c.width=Math.round(2*half*k);c.height=Math.round(im.height*k);const q=c.getContext('2d');q.scale(k,k);
+    if(left){q.drawImage(rc,0,0,half,im.height,0,0,half,im.height);q.save();q.translate(2*half,0);q.scale(-1,1);q.drawImage(rc,0,0,half,im.height,0,0,half,im.height);q.restore()}
+    else{q.drawImage(rc,o[0],0,half,im.height,half,0,half,im.height);q.save();q.translate(half,0);q.scale(-1,1);q.drawImage(rc,o[0],0,half,im.height,0,0,half,im.height);q.restore()}
+    const box=document.createElement('div');box.style.textAlign='center';c.style.cssText='max-width:100%;border-radius:8px;display:block;margin:0 auto';box.append(c);const t=document.createElement('div');t.className='note';t.textContent=lab;box.append(t);M.append(box)}}
+const FS_SCHEMA={type:'object',properties:{is_frontal_face:{type:'boolean'},points:{type:'array',items:{type:'object',properties:{name:{type:'string',enum:FS_PTS.map(p=>p[0])},x:{type:'number'},y:{type:'number'}},required:['name','x','y'],additionalProperties:false}},note:{type:'string'}},required:['is_frontal_face','points','note'],additionalProperties:false};
+async function fsFind(){if(!(await fsLoad()))return toast('Add the frontal face photo first');if(!lsGet('oa-claude-key')&&!(await askKey()))return;
+  if(lsGet('oa-ai-okface')!=='1'){if(!confirm('This sends the face photo (no name or other details) from this device to Claude AI (Anthropic) to find the points. Continue?'))return;lsSet('oa-ai-okface','1')}
+  const b=$('#fsFind');b.disabled=true;$('#fsInfo').textContent='Finding the points…';
+  try{const im=fsImg.im,W=Math.min(1200,im.width),k=W/im.width,c=document.createElement('canvas');c.width=W;c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+    const prompt=`This is a frontal photograph of a person's face, ${c.width} x ${c.height} pixels. Give these soft-tissue points in image pixels (x from the left, y from the top). The patient's RIGHT side is on the image LEFT. Points:\n${FS_PTS.map(([k,n])=>`- ${k}: ${n}`).join('\n')}\nGo / jaw angle: the gonial angle on the face outline. Leave out points you cannot see. Set is_frontal_face to false if this is not a frontal face photo.`;
+    const key=lsGet('oa-claude-key'),r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-beta':'server-side-fallback-2026-07-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:CLAUDE_MODEL,max_tokens:6000,fallbacks:'default',output_config:{effort:'high',format:{type:'json_schema',schema:FS_SCHEMA}},messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:'image/jpeg',data:c.toDataURL('image/jpeg',0.9).split(',')[1]}},{type:'text',text:prompt}]}]})});
+    const res=await r.json().catch(()=>({}));if(r.status===401||r.status===403)throw new Error('your Claude key was not accepted — check it in ⋯ → Claude AI key');if(!r.ok)throw new Error((res.error&&res.error.message)||'Claude AI error '+r.status);
+    if(res.stop_reason==='refusal')throw new Error('Claude AI declined this image');const o=JSON.parse((res.content||[]).filter(x=>x.type==='text').map(x=>x.text).join(''));if(!o.is_frontal_face)throw new Error('this does not look like a frontal face photo');
+    const s=fsState();for(const p of o.points)s.pts[p.name]=[r1(p.x/k),r1(p.y/k)];save();fsRender()}catch(e){toast('Facial symmetry: '+e.message);fsRender()}finally{b.disabled=false}}
+function fsPt(e){const cv=$('#fsCv'),r=cv.getBoundingClientRect(),sc=cv.width/fsImg.im.width;return[(e.clientX-r.left)*cv.width/r.width/sc,(e.clientY-r.top)*cv.height/r.height/sc]}
 
 async function renderPred(){if(!cur||!$('#predCv'))return;const k=cur.photos.ep;if(!k){$('#predInfo').innerHTML='Add the profile photo (Face – profile) above to see the predicted profile.';const c=$('#predCv');c.width=c.height=0;return}
   if(!predImg||predImg.key!==k){try{predImg=await loadImg(await blobURL(k));predImg.key=k}catch(e){return}}
