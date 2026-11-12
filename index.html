@@ -364,6 +364,7 @@ dialog::backdrop{background:#000a}
     <button class="btn sm" id="cOK" hidden>✓ Accept all</button>
     <button class="btn sm" id="cUndo" disabled title="Undo the last landmark change (Ctrl+Z)">↶ Undo</button>
     <button class="btn sm" id="cClrAuto" hidden title="Remove every landmark that Auto-detect or Quick place put down and you have not checked">✕ Remove auto points</button>
+    <button class="btn sm" id="cClrMan" hidden title="Remove every landmark you placed or checked by hand">✕ Remove manual points</button>
     <label class="note" title="Run ✨ Auto-detect as soon as a ceph is uploaded"><input type="checkbox" id="cInst"> ⚡ Instant</label>
     <select class="btn sm" id="cAnal" aria-label="Analysis"></select><button class="btn sm" id="anEdit" hidden title="Edit or delete this analysis">✎</button>
     <button class="btn sm" id="cCal" aria-pressed="false">Calibrate (ruler)</button>
@@ -1033,7 +1034,7 @@ function renderLm(){$('#lmList').innerHTML=LMS.map(([k,n,d],i)=>`<div class="lm 
 let cephHist=[];
 const cephState=()=>JSON.stringify({pts:cur.ceph.pts,auto:cur.ceph.auto||{}});
 function cephSnap(){const s=cephState();if(cephHist[cephHist.length-1]!==s)cephHist.push(s);if(cephHist.length>80)cephHist.shift();updUndo()}
-function updUndo(){const b=$('#cUndo');if(b)b.disabled=!cephHist.some(h=>h!==cephState());const a=$('#cClrAuto');if(a)a.hidden=!Object.values(cur.ceph.auto||{}).some(Boolean)}
+function updUndo(){const b=$('#cUndo');if(b)b.disabled=!cephHist.some(h=>h!==cephState());const a=$('#cClrAuto');if(a)a.hidden=!Object.values(cur.ceph.auto||{}).some(Boolean);const m=$('#cClrMan');if(m)m.hidden=!Object.keys(cur.ceph.pts).some(k=>!(cur.ceph.auto||{})[k])}
 function cephUndo(){const now=cephState();while(cephHist.length&&cephHist[cephHist.length-1]===now)cephHist.pop();const h=cephHist.pop();if(!h){updUndo();return toast('Nothing to undo')}
   const o=JSON.parse(h);cur.ceph.pts=o.pts;cur.ceph.auto=o.auto;save();lmIdx=nextMissing(0);renderLm();renderCephTable();renderLive(null);cephView.draw();updUndo()}
 $('#lmList').onclick=e=>{const c=e.target.closest('[data-clr]');if(c){cephSnap();delete cur.ceph.pts[c.dataset.clr];delete cur.ceph.auto[c.dataset.clr];save();renderLm();renderCephTable();cephView.draw();return}const r=e.target.closest('.lm');if(r){lmIdx=+r.dataset.i;renderLm()}};
@@ -1210,6 +1211,8 @@ $('#cAI').onclick=async()=>{if(aiBusy)return;const img=cephView.img;if(!img)retu
   catch(e){toast('Auto-detect failed: '+(e.message==='Failed to fetch'?'could not reach Claude AI — check the internet connection':e.message))}
   finally{aiBusy=false;btn.disabled=false;btn.textContent='✨ Auto-detect';renderLm()}};
 $('#cUndo').onclick=cephUndo;
+$('#cClrMan').onclick=()=>{const ks=Object.keys(cur.ceph.pts).filter(k=>!(cur.ceph.auto||{})[k]);if(!ks.length)return;cephSnap();for(const k of ks){delete cur.ceph.pts[k];delete cur.ceph.auto[k]}
+  save();lmIdx=nextMissing(0);renderLm();renderCephTable();renderLive(null);cephView.draw();toast(ks.length+' manually placed landmark'+(ks.length>1?'s':'')+' removed — ↶ Undo brings them back')};
 $('#cClrAuto').onclick=()=>{const ks=Object.keys(cur.ceph.auto||{}).filter(k=>cur.ceph.auto[k]);if(!ks.length)return;cephSnap();for(const k of ks){delete cur.ceph.pts[k];delete cur.ceph.auto[k]}
   save();lmIdx=nextMissing(0);renderLm();renderCephTable();renderLive(null);cephView.draw();toast(ks.length+' auto-detected landmark'+(ks.length>1?'s':'')+' removed — ↶ Undo brings them back')};
 addEventListener('keydown',e=>{if(curTab!=='ceph'||!(e.ctrlKey||e.metaKey)||e.key.toLowerCase()!=='z'||e.shiftKey||/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))return;e.preventDefault();cephUndo()});
